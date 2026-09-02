@@ -1,2 +1,29 @@
+# OS
 .DS_Store
-.DS_Store
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Environment — never commit real credentials
+.env
+.env.local
+.env.*.local
+
+# Test / coverage caches
+coverage/
+.nyc_output/
+
+# Vite / Vitest cache
+.vite/
+
+# TypeScript incremental build info
+*.tsbuildinfo
+
+# Editor
+.idea/
+*.swp
+*.swo
