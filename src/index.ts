@@ -5,6 +5,7 @@
 
 export * from './domain/index.js';
 export * from './normalization/index.js';
+export * from './deduplication/index.js';
 export * from './detection/index.js';
 export * from './extraction/index.js';
 export * from './scoring/index.js';

@@ -137,6 +137,8 @@ export interface Situation {
   businessId?: string;
   sourceContentIds: string[];
   relatedContentIds: string[];
+  /** Permalink to the original source content. Set from NormalizedContent.permalink. */
+  permalink: string;
   language: string;
   geographies: string[];
   businessStage: BusinessStage;

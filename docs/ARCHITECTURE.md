@@ -8,13 +8,13 @@ Source Adapter
     ↓
 Normalized Content
     ↓
-Deduplication
+Deduplication  ← implemented (InMemoryDeduplicator; source-independent fingerprint)
     ↓
 Candidate Detection
     ↓
 Situation Extraction
     ↓
-Author / Context Enrichment
+Author / Context Enrichment  ← async, fault-tolerant (resolver: (id) => Promise<Author>)
     ↓
 Scoring
     ↓

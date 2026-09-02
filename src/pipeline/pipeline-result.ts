@@ -4,4 +4,5 @@ export interface PipelineResult {
   scanRun: ScanRun;
   situations: Situation[];
   cards: OpportunityCard[];
+  duplicatesSkipped: number;
 }

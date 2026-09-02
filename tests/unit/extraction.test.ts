@@ -175,5 +175,10 @@ describe('DeterministicSituationExtractor', () => {
       expect(situation.createdAt).toBeInstanceOf(Date);
       expect(situation.updatedAt).toBeInstanceOf(Date);
     });
+
+    it('permalink is set from NormalizedContent.permalink', () => {
+      const situation = extract(F01_THAI_MANUFACTURER, A01_THAI_MANUFACTURER);
+      expect(situation.permalink).toBe('https://fixture.test/r/internationalbusiness/f01');
+    });
   });
 });

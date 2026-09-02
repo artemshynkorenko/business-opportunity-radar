@@ -314,3 +314,20 @@ export const A10_MLM: Author = {
   accountAgeDays: 30,
   karma: 5,
 };
+
+// ---------------------------------------------------------------------------
+// F11: Unknown author — used for author-resolution failure tests
+// ---------------------------------------------------------------------------
+
+export const F11_UNKNOWN_AUTHOR: RawFixtureContent = {
+  id: 'f11-unknown-author',
+  authorId: 'author-nonexistent',  // not in AUTHOR_MAP
+  communityId: 'r-test',
+  text: 'We are looking for a business partner to expand our manufacturing operations in Southeast Asia.',
+  title: 'Seeking business partner for SEA expansion',
+  timestamp: '2024-02-10T10:00:00Z',
+  permalink: 'https://fixture.test/r/test/f11',
+  language: 'en',
+  contentType: 'post',
+  metadata: {},
+};

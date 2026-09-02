@@ -58,9 +58,9 @@ describe('DefaultOpportunityCardFormatter', () => {
       expect(card.geography).toContain('Thailand');
     });
 
-    it('source link is set', () => {
+    it('source link is set to the real fixture permalink', () => {
       const { card } = prepareCard(F01_THAI_MANUFACTURER, A01_THAI_MANUFACTURER);
-      expect(card.sourceLink).toContain('f01-thai-manufacturer');
+      expect(card.sourceLink).toBe('https://fixture.test/r/internationalbusiness/f01');
     });
   });
 
@@ -122,6 +122,31 @@ describe('DefaultOpportunityCardFormatter', () => {
       situation.relationshipConfidence = confidenceCalc.calculate(situation, A01_THAI_MANUFACTURER);
       const card = formatter.format(situation, [], A01_THAI_MANUFACTURER);
       expect(card.renderedText).toContain('No direct capability match');
+    });
+  });
+
+  describe('Permalink handling', () => {
+    it('sourceLink uses the real permalink from the situation', () => {
+      const content = normalizer.normalize(F01_THAI_MANUFACTURER, 'fixture');
+      const situation = extractor.extract(content, A01_THAI_MANUFACTURER, 'run-test');
+      situation.opportunityScore = scorer.score(situation, USER_CAPABILITIES);
+      situation.relationshipConfidence = confidenceCalc.calculate(situation, A01_THAI_MANUFACTURER);
+      const matches = matcher.match(situation, USER_CAPABILITIES);
+      const card = formatter.format(situation, matches, A01_THAI_MANUFACTURER);
+      expect(card.sourceLink).toBe('https://fixture.test/r/internationalbusiness/f01');
+    });
+
+    it('sourceLink falls back to content: when permalink is empty', () => {
+      const content = normalizer.normalize(F01_THAI_MANUFACTURER, 'fixture');
+      const situation = extractor.extract(content, A01_THAI_MANUFACTURER, 'run-test');
+      // Force empty permalink to test fallback
+      situation.permalink = '';
+      situation.opportunityScore = scorer.score(situation, USER_CAPABILITIES);
+      situation.relationshipConfidence = confidenceCalc.calculate(situation, A01_THAI_MANUFACTURER);
+      const matches = matcher.match(situation, USER_CAPABILITIES);
+      const card = formatter.format(situation, matches, A01_THAI_MANUFACTURER);
+      expect(card.sourceLink).toMatch(/^content:/);
+      expect(card.sourceLink).toContain('f01-thai-manufacturer');
     });
   });
 });

@@ -7,4 +7,6 @@ export interface Repository<T> {
   findById(id: string): Promise<T | null>;
   findAll(): Promise<T[]>;
   query(predicate: (item: T) => boolean): Promise<T[]>;
+  /** Returns true if an item with this id already exists. */
+  exists(id: string): Promise<boolean>;
 }

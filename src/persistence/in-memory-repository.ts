@@ -27,6 +27,10 @@ export class InMemoryRepository<T> implements Repository<T> {
     return [...this.store.values()].filter(predicate);
   }
 
+  async exists(id: string): Promise<boolean> {
+    return this.store.has(id);
+  }
+
   /** Returns the number of items currently stored. */
   get size(): number {
     return this.store.size;

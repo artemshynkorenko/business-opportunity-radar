@@ -82,6 +82,8 @@ The core must expose a persistence interface without coupling domain logic to a 
 
 A simple in-memory implementation is sufficient for v0.1.
 
+The persistence interface must support idempotent saves via an `exists()` check. The pipeline must not create duplicate Situations on rerun — if a Situation with the same ID already exists in the repository, the save is skipped.
+
 ## R7 — Opportunity Card
 The system shall be able to render a compact opportunity card containing at least:
 - type

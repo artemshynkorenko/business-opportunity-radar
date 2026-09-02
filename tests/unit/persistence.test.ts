@@ -13,6 +13,7 @@ function makeSituation(id: string): Situation {
     authorId: 'author-1',
     sourceContentIds: ['content-1'],
     relatedContentIds: [],
+    permalink: 'https://test.test/stub',
     language: 'en',
     geographies: ['Thailand'],
     businessStage: 'established',
@@ -113,6 +114,26 @@ describe('InMemoryRepository', () => {
     repo.clear();
     expect(repo.size).toBe(0);
     expect(await repo.findAll()).toHaveLength(0);
+  });
+
+  describe('exists()', () => {
+    it('returns false for non-existent id', async () => {
+      expect(await repo.exists('non-existent')).toBe(false);
+    });
+
+    it('returns true after save', async () => {
+      const s = makeSituation('sit-exists-1');
+      await repo.save(s);
+      expect(await repo.exists('sit-exists-1')).toBe(true);
+    });
+
+    it('save twice with same id: exists() still true, findAll() returns 1 item', async () => {
+      const s = makeSituation('sit-upsert-1');
+      await repo.save(s);
+      await repo.save({ ...s, title: 'Updated title' });
+      expect(await repo.exists('sit-upsert-1')).toBe(true);
+      expect(await repo.findAll()).toHaveLength(1);
+    });
   });
 });
 

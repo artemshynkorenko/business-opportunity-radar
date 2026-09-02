@@ -1,12 +1,14 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Pipeline } from '../../src/pipeline/pipeline.js';
 import { FixtureNormalizer } from '../../src/normalization/fixture-normalizer.js';
+import { InMemoryDeduplicator } from '../../src/deduplication/in-memory-deduplicator.js';
 import { RuleBasedCandidateDetector } from '../../src/detection/rule-based-detector.js';
 import { DeterministicSituationExtractor } from '../../src/extraction/deterministic-extractor.js';
 import { WeightedOpportunityScorer } from '../../src/scoring/weighted-opportunity-scorer.js';
 import { RelationshipConfidenceCalculator } from '../../src/scoring/relationship-confidence-calculator.js';
 import { CapabilityBasedMatcher } from '../../src/matching/capability-based-matcher.js';
 import { DefaultOpportunityCardFormatter } from '../../src/cards/default-card-formatter.js';
+import { SituationRepository } from '../../src/persistence/repositories.js';
 import { USER_CAPABILITIES } from '../../src/matching/user-capabilities.js';
 import type { Author } from '../../src/domain/index.js';
 import {
@@ -20,6 +22,7 @@ import {
   F08_MOTIVATIONAL, A08_HUSTLER,
   F09_EU_SOURCING, A09_EU_BUYER,
   F10_MLM_NOISE, A10_MLM,
+  F11_UNKNOWN_AUTHOR,
 } from '../fixtures/raw-fixtures.js';
 
 const AUTHOR_MAP: Record<string, Author> = {
@@ -35,21 +38,23 @@ const AUTHOR_MAP: Record<string, Author> = {
   'author-mlm': A10_MLM,
 };
 
-function createPipeline() {
+function createPipeline(situationRepository?: SituationRepository) {
   return new Pipeline(
     new FixtureNormalizer(),
+    new InMemoryDeduplicator(),
     new RuleBasedCandidateDetector(),
     new DeterministicSituationExtractor(),
     new WeightedOpportunityScorer(),
     new RelationshipConfidenceCalculator(),
     new CapabilityBasedMatcher(),
     new DefaultOpportunityCardFormatter(),
-    (authorId: string) => {
+    async (authorId: string) => {
       const author = AUTHOR_MAP[authorId];
       if (!author) throw new Error(`Unknown author: ${authorId}`);
       return author;
     },
-    USER_CAPABILITIES
+    USER_CAPABILITIES,
+    situationRepository
   );
 }
 
@@ -109,6 +114,11 @@ describe('End-to-End Pipeline', () => {
     expect(result.scanRun.errors).toHaveLength(0);
   });
 
+  it('duplicatesSkipped is 0 when all content is unique', async () => {
+    const result = await pipeline.run(ALL_FIXTURES, 'fixture');
+    expect(result.duplicatesSkipped).toBe(0);
+  });
+
   describe('F01: Thai manufacturer seeking EU distributor', () => {
     it('passes through pipeline as a situation', async () => {
       const result = await pipeline.run([F01_THAI_MANUFACTURER], 'fixture');
@@ -135,6 +145,12 @@ describe('End-to-End Pipeline', () => {
           ['distributor', 'market-entry-partner', 'partner', 'sourcing-partner'].includes(r)
         )
       ).toBe(true);
+    });
+
+    it('card sourceLink contains the fixture permalink', async () => {
+      const result = await pipeline.run([F01_THAI_MANUFACTURER], 'fixture');
+      const card = result.cards[0];
+      expect(card.sourceLink).toBe('https://fixture.test/r/internationalbusiness/f01');
     });
   });
 
@@ -286,6 +302,91 @@ describe('End-to-End Pipeline', () => {
       const result = await pipeline.run(ALL_FIXTURES, 'fixture');
       expect(result.scanRun.candidatesFound).toBeLessThanOrEqual(result.scanRun.contentProcessed);
       expect(result.scanRun.situationsCreated).toBeLessThanOrEqual(result.scanRun.candidatesFound);
+    });
+
+    it('all situations have permalink set', async () => {
+      const result = await pipeline.run(ALL_FIXTURES, 'fixture');
+      for (const sit of result.situations) {
+        expect(sit.permalink).toBeTruthy();
+        expect(sit.permalink).toMatch(/^https?:\/\//);
+      }
+    });
+
+    it('all cards have real permalink as sourceLink (not content: fallback)', async () => {
+      const result = await pipeline.run(ALL_FIXTURES, 'fixture');
+      for (const card of result.cards) {
+        expect(card.sourceLink).toMatch(/^https?:\/\//);
+      }
+    });
+  });
+
+  describe('Deduplication', () => {
+    it('running pipeline twice with same deduplicator skips duplicates on second run', async () => {
+      const deduplicator = new InMemoryDeduplicator();
+      const sharedPipeline = new Pipeline(
+        new FixtureNormalizer(),
+        deduplicator,
+        new RuleBasedCandidateDetector(),
+        new DeterministicSituationExtractor(),
+        new WeightedOpportunityScorer(),
+        new RelationshipConfidenceCalculator(),
+        new CapabilityBasedMatcher(),
+        new DefaultOpportunityCardFormatter(),
+        async (authorId: string) => {
+          const author = AUTHOR_MAP[authorId];
+          if (!author) throw new Error(`Unknown author: ${authorId}`);
+          return author;
+        },
+        USER_CAPABILITIES
+      );
+      // First run — all unique
+      const first = await sharedPipeline.run(ALL_FIXTURES, 'fixture');
+      expect(first.duplicatesSkipped).toBe(0);
+      // Second run with same deduplicator — all should be skipped
+      const second = await sharedPipeline.run(ALL_FIXTURES, 'fixture');
+      expect(second.duplicatesSkipped).toBe(ALL_FIXTURES.length);
+    });
+  });
+
+  describe('Author resolution fault tolerance', () => {
+    it('unknown author causes error but other items still process', async () => {
+      // F11 has authorId 'author-nonexistent' which is not in AUTHOR_MAP
+      const fixtures = [F01_THAI_MANUFACTURER, F11_UNKNOWN_AUTHOR, F09_EU_SOURCING];
+      const result = await pipeline.run(fixtures, 'fixture');
+
+      // F11 skipped due to unknown author; F01 and F09 should succeed
+      expect(result.situations.length).toBeGreaterThanOrEqual(1);
+      expect(result.scanRun.errors.length).toBeGreaterThanOrEqual(1);
+      expect(result.scanRun.errors.some((e) => e.includes('author-nonexistent'))).toBe(true);
+    });
+
+    it('unknown author error does not stop other candidates from being processed', async () => {
+      const result = await pipeline.run([F11_UNKNOWN_AUTHOR, F01_THAI_MANUFACTURER], 'fixture');
+      // F01 should still be processed even though F11 failed
+      expect(result.situations.length).toBeGreaterThanOrEqual(1);
+      expect(result.situations.some((s) => s.situationId === 'sit-f01-thai-manufacturer')).toBe(true);
+    });
+
+    it('resolver rejects for unknown author, item is skipped', async () => {
+      const result = await pipeline.run([F11_UNKNOWN_AUTHOR], 'fixture');
+      expect(result.situations).toHaveLength(0);
+      expect(result.scanRun.errors.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe('Idempotent persistence', () => {
+    it('running pipeline twice with a repository does not duplicate situations', async () => {
+      const repo = new SituationRepository();
+      const p1 = createPipeline(repo);
+      const p2 = createPipeline(repo);
+
+      await p1.run(ALL_FIXTURES, 'fixture');
+      const countAfterFirst = (await repo.findAll()).length;
+
+      await p2.run(ALL_FIXTURES, 'fixture');
+      const countAfterSecond = (await repo.findAll()).length;
+
+      expect(countAfterSecond).toBe(countAfterFirst);
     });
   });
 });

@@ -58,6 +58,7 @@ export class DeterministicSituationExtractor implements SituationExtractorInterf
       businessId: undefined,
       sourceContentIds: [content.contentId],
       relatedContentIds: [],
+      permalink: content.permalink,
       language: content.language ?? 'en',
       geographies,
       businessStage,

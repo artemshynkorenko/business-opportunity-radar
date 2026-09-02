@@ -92,8 +92,10 @@ export class DefaultOpportunityCardFormatter implements OpportunityCardFormatter
   }
 
   private deriveSourceLink(situation: Situation): string {
-    // In MVP Core, source content IDs serve as references.
-    // Real links would come from NormalizedContent.permalink in production.
+    if (situation.permalink && situation.permalink.length > 0) {
+      return situation.permalink;
+    }
+    // Graceful fallback for situations without a source permalink
     return `content:${situation.sourceContentIds[0] ?? 'unknown'}`;
   }
 

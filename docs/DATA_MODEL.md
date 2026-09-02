@@ -12,6 +12,7 @@ Fields:
 - business_id
 - source_content_ids
 - related_content_ids
+- permalink  ← URL of the original source content (from NormalizedContent.permalink)
 - language
 - geographies
 - business_stage
