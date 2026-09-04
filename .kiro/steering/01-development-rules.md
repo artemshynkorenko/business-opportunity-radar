@@ -20,13 +20,15 @@ Source Adapter
 Source adapters must be replaceable and must not leak source-specific concepts into the core domain.
 
 ## Current Scope
-Implement only MVP Core v0.1.
+MVP Core v0.1 plus the first real source adapter.
 
 Use synthetic fixtures to demonstrate the pipeline.
 
+Implemented:
+- Threads API integration — official Threads API, read-only keyword search, isolated in a source adapter that maps into the source-independent core. Read-only only: no posting, commenting, messaging, or automated outreach. A minimal Meta Review Demo web app exercises this flow.
+
 Do NOT implement:
 - Reddit API
-- Threads API
 - scraping
 - browser automation
 - n8n orchestration

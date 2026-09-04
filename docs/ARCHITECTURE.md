@@ -48,8 +48,13 @@ Keep LLM processing behind an interface so tests do not require an API key.
 ### Reddit
 Only officially approved/supported access. No scraping, browser automation, undocumented endpoints, CAPTCHA bypass, IP rotation, or rate-limit circumvention. Keep the adapter isolated.
 
-### Threads
-Use the official Threads API. Verify current documentation, permissions, quotas, retention rules, and exact endpoint parameters before implementation. Keep the adapter isolated.
+### Threads (implemented)
+Uses the official Threads API (`keyword_search`), read-only, via an isolated `ThreadsSearchAdapter`
+that maps responses into source-independent `NormalizedContent`. The adapter feeds the existing core
+pipeline through `ThreadsPipelineRunner`; the core remains source-independent. A minimal Meta Review
+Demo web app (`npm run demo`) exposes the flow: user intent → derived search strategy → Threads
+retrieval → pipeline → opportunity cards. Public keyword search availability depends on Meta App
+Review approval of `threads_keyword_search`; see `docs/SEARCH_STRATEGY.md` §9.
 
 ## Stack direction
 Prefer TypeScript/Node.js, PostgreSQL, n8n later for orchestration, LLM API behind an abstraction, Telegram later.

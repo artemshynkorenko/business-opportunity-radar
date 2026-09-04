@@ -12,7 +12,7 @@ signal → conversation → relationship → opportunity
 ## Current Phase
 MVP Core v0.1.
 
-The first implementation must be source-independent and use synthetic fixtures. Do not implement Reddit or Threads ingestion yet.
+The core is source-independent and validated with synthetic fixtures. Threads ingestion is now implemented (official Threads API, read-only keyword search) as the first real source adapter, kept isolated from the source-independent core. Reddit ingestion is not implemented yet.
 
 ## Primary Analytical Object
 The primary analytical object is a Situation, not a Post.
