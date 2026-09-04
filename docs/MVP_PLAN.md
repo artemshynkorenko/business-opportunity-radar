@@ -33,6 +33,16 @@ Design and implement the minimum semantic model:
 The implementation may initially remain **deterministic** where necessary. An
 LLM is **not** required at this stage.
 
+Implementation discipline (normative; see `docs/SEARCH_STRATEGY.md` §19):
+conceptual boundaries matter more than class count — use the smallest set of
+modules/types that preserves the semantic boundaries; do not create abstractions
+merely because a concept is named; "Search Strategy" need not be a runtime
+object; and Phase 1 must deliver a narrow but **end-to-end testable vertical
+slice** (intent → structured intent → hypotheses → signal families → retrieval
+planning → source retrieval → existing core), not an isolated semantic layer.
+Structured Intent must be designed from these requirements, **not**
+reverse-engineered from the transitional `intent-to-strategy.ts` parser.
+
 ## Phase 2 — Retrieval separation
 
 Separate semantic strategy from platform retrieval. Threads-specific query

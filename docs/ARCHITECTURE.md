@@ -26,7 +26,9 @@ Source Adapter                  (How do we talk to this specific source?)
 Existing Core Pipeline
 ```
 
-Intent Understanding is an abstraction (deterministic, model-based, or hybrid); no LLM dependency is assumed. The current `src/web/intent-to-strategy.ts` is a **transitional** deterministic implementation that conflates these layers and is not the target architecture.
+Intent Understanding is an abstraction (deterministic, model-based, or hybrid); no LLM dependency is assumed. The current `src/web/intent-to-strategy.ts` is a **transitional** deterministic implementation that conflates these layers and is not the target architecture (migration direction: `docs/SEARCH_STRATEGY.md` §16).
+
+These are **conceptual boundaries, not a prescribed runtime class layout.** Implementation must use the smallest set of modules/types that preserves the boundaries — do not create an abstraction merely because a concept has a name, and do not treat "Search Strategy" as necessarily a runtime object. The first implementation must be a narrow, end-to-end testable **vertical slice**, not an isolated semantic layer. See `docs/SEARCH_STRATEGY.md` §19 for the normative implementation guidance.
 
 ## Core pipeline (source-independent, implemented)
 Only source-independent `NormalizedContent` enters this back half:

@@ -86,36 +86,86 @@ interests. The profile influences discovery but is not part of the current
 intent.
 
 ### 3.3 Structured Intent
-A semantic representation of the current discovery request. It captures only
-information justified by the user's request and relevant profile context.
-Conceptually it may include: domains; entities; geography; desired situations;
-desired relationship types; result targets; constraints; exclusions; timing;
-specificity. **The exact code structure is deferred to implementation.**
+A semantic representation of **what the user means** in the current discovery
+request. It captures only information justified by the user's request and
+relevant profile context. Conceptually it may include: domains; entities;
+geography; desired situations; desired relationship types; result targets;
+constraints; exclusions; timing; specificity. **The exact code structure is
+deferred to implementation.**
 
-Rules:
-- Every inferred value must remain distinguishable from explicitly stated
-  information (explicit vs inferred vs unknown).
-- Unknown information stays unknown — it is never defaulted into a fabricated
-  requirement.
-- Structured Intent contains **no platform-specific search queries** and is not a
-  disguised list of search terms.
+Normative rules:
+- Structured Intent **must** represent meaning, not surface tokens. It **must
+  not** be implemented as existing keyword extraction wrapped in a new interface
+  and renamed "semantic intent understanding."
+- It **must** be designed from the semantic/product requirements in this
+  document, **not** reverse-engineered from the existing `intent-to-strategy.ts`
+  parser. The transitional parser (see §16) may contain useful legacy behavior,
+  but it does **not** define the semantic model.
+- Every value **must** carry provenance (see §3.3.1); inferred values must remain
+  distinguishable from explicitly stated ones.
+- Unknown information **must** stay unknown (see §3.3.2); it is never defaulted
+  into a fabricated requirement.
+- Structured Intent **must** contain **no** platform-specific search queries and
+  **must not** be a disguised list of search terms. It is source-independent.
+
+#### 3.3.1 Provenance (semantic information carries its origin)
+Semantic information has one of four provenances, which **must** be represented
+structurally wherever it affects interpretation or downstream behavior:
+
+- **explicit** — stated by the user.
+- **inferred** — derived by the intent-understanding process (confidence < full).
+- **profile** — supplied by the persistent user profile, not this request.
+- **unknown** — not established.
+
+Reasonable inference **must not** be promoted to `explicit`, and uncertainty
+**must not** be converted into false certainty merely to simplify
+implementation. This is the same explicit-vs-inferred discipline used by the
+core's Evidence model (`docs/DATA_MODEL.md`), applied to intent.
+
+#### 3.3.2 Unknown is first-class
+If the user does not specify something, the system **must** be able to represent
+it as `unknown` and proceed accordingly. It **must not** silently fill an unknown
+with a product assumption.
+
+In particular, an underspecified relationship type **must not** automatically
+become "looking for a partner." The previous `seeking-partner` fallback behavior
+is explicitly a **product/architecture smell** and **must not** survive as the
+semantic default in the target architecture. Underspecification is handled by
+profile-derived exploration (tagged `profile`) or by at most one clarification
+(§8) — never by a fabricated default intent.
 
 ### 3.4 Opportunity Hypothesis
-A meaningful description of a *type of situation* that could satisfy the user's
-discovery objective.
+An Opportunity Hypothesis represents a **meaningful situation the system believes
+may exist in the source and that is potentially relevant to the user's intent.**
+It is the semantic bridge between what the user means and what evidence to look
+for.
 
 Example:
 
 > An established Thai manufacturer is preparing to enter Europe and may need
 > local commercial, distribution, or strategic support.
 
+A hypothesis **must** be able to express the semantic relationship between:
+
+- the type of **actor / entity** involved;
+- the **situation** the actor is in;
+- the relevant **need / problem / opportunity**;
+- the **expected observable evidence** (which **signal families**, §3.5, would
+  indicate it — referenced by concept, never as queries);
+- potentially relevant **relationship / action types** (only when justified);
+- **confidence / provenance** where appropriate (§3.7).
+
+Rules:
 - A single intent may produce **multiple** hypotheses.
 - Hypotheses may be **weighted / prioritized**.
 - Capabilities may affect how **actionable** a hypothesis is for a particular
-  user, but capabilities must **not invent** hypotheses unsupported by the
+  user, but capabilities **must not invent** hypotheses unsupported by the
   user's intent.
 
-A hypothesis is **not** a keyword, a query, a signal family, a post, or a score.
+A hypothesis is **not**, and must not be implemented as, any of: a keyword; a
+query; a signal family; a post; a score; a detection rule; or merely a list of
+selected signal families. It is a semantic description of a situation, richer
+than the families it references.
 
 ### 3.5 Signal Family
 A reusable, platform-independent **semantic** category of observable evidence
@@ -133,15 +183,22 @@ that a relevant situation exists. Representative families:
 - local partner needed
 - collaboration opportunity / project launch
 
-A signal family is **not** a retrieval query and **not** a detection rule. The
-same family may later be expressed through many different platform-specific
-queries.
+A Signal Family is a **reusable, platform-independent semantic category of
+observable evidence**. It is the intermediate semantic bridge between hypotheses
+and retrieval: a hypothesis references the families that would evidence it, and
+the retrieval layer later expresses each family through source-specific queries.
+
+A Signal Family is **not**, and must not be implemented as, any of: a search
+query; a platform-specific keyword; a detection rule; an opportunity hypothesis;
+or a score. Platform-specific vocabulary and query formulation **must** appear
+downstream, in Retrieval Strategy / platform-specific retrieval — never in the
+signal family itself.
 
 > **Transitional note:** the current `SIGNAL_FAMILIES` structure in
 > `src/web/intent-to-strategy.ts` mixes three responsibilities — intent triggers,
-> semantic meaning, and retrieval queries. These must eventually be separated:
-> triggers belong to Intent Understanding, the semantic family belongs here, and
-> queries belong to Retrieval Strategy.
+> semantic meaning, and retrieval queries. These **must** eventually be
+> separated: triggers belong to Intent Understanding, the semantic family belongs
+> here, and queries belong to Retrieval Strategy (see §16).
 
 ### 3.6 Retrieval Strategy
 The layer that decides **how** to retrieve evidence for the semantic hypotheses
@@ -318,15 +375,34 @@ positives/negatives; refine signal families and query generation; evaluate TOP v
 RECENT; evaluate language/geography variants; add semantic expansion where
 useful; only then set a production query budget.
 
-## 16. `src/web/intent-to-strategy.ts` status
+## 16. `src/web/intent-to-strategy.ts` status and migration
 
 The current `intent-to-strategy.ts` is a **transitional deterministic
-implementation**, not the target architecture. It conflates intent understanding,
-domain/geography extraction, signal-family selection, hypothesis labeling, and
-platform query construction into one function. It is retained as a working demo
-bridge and will be decomposed along the boundaries in §2/§9 in later phases. Do
-not treat its hardcoded trigger list or keyword queries as the product's
-discovery model.
+implementation**, not the target architecture. Do not treat its hardcoded
+trigger list or keyword queries as the product's discovery model.
+
+Its current mixed responsibilities include:
+
+- **intent classification** — substring trigger matching against the raw text;
+- **semantic interpretation** — ad-hoc domain/geography extraction;
+- **signal-family selection** — choosing predefined families;
+- **hypothesis generation** — static per-family hypothesis labels;
+- **query construction** — building platform keyword strings;
+- **retrieval policy** — bounded fallback/query-count behavior;
+- **product-default fallback** — the `seeking-partner` default (a smell; §3.3.2).
+
+Intended migration direction (not implemented in this stage):
+
+```text
+old mixed implementation
+  → separate semantic responsibilities (understanding, hypotheses, families)
+  → move retrieval-specific responsibilities downstream (queries, mode, budget)
+  → remove the product-default fallback behavior
+```
+
+The file may be retained as a working demo bridge until the semantic vertical
+slice (§19.3) replaces its responsibilities. It **must not** define the semantic
+model.
 
 ## 17. What must NOT be fixed prematurely
 
@@ -343,3 +419,55 @@ core, `NormalizedContent`, deduplication, candidate detection, Situation
 extraction, scoring, profile-driven matching, and Threads adapter isolation. The
 new work is the **front half of discovery** (intent → hypotheses → signal
 families → retrieval strategy).
+
+## 19. Implementation guidance (conceptual model vs runtime)
+
+The concepts in §3 are a **conceptual model**, not a prescription for runtime
+structure. The following rules govern how implementation should relate to it.
+
+### 19.1 Minimal implementation — conceptual boundaries, not class count
+- Conceptual boundaries matter more than the number of classes/services/modules.
+- Implementation **must** use the smallest set of modules/types that preserves
+  the semantic boundaries (understanding vs strategy vs retrieval vs source
+  adapter; intent vs profile; hypothesis vs signal family; retrieval strategy vs
+  source adapter).
+- Do **not** create an abstraction solely because a concept has a name, and do
+  **not** proliferate frameworks/classes prematurely.
+- A future implementation is judged by **responsibility and data flow**, not by
+  how closely its file/class structure mirrors the conceptual model.
+
+### 19.2 "Search Strategy" is a responsibility, not necessarily a runtime object
+This document uses **Search Strategy** as a conceptual responsibility ("what
+kinds of situations are worth looking for"). Whether it becomes a concrete
+runtime class/object is an implementation decision to be made from actual needs
+during Stage 4 design. Implementation **must not** mechanically create a runtime
+object merely because the documentation names the concept. The same applies to
+any named concept here.
+
+### 19.3 Minimal vertical slice first
+Phase 1 **must not** produce a semantic layer that exists in isolation and cannot
+be exercised through discovery. The first implementation slice **must** be
+deliberately narrow but **end-to-end testable**, demonstrating:
+
+```text
+natural-language intent
+  → semantic interpretation → structured intent
+  → hypothesis formation → semantic signal families
+  → retrieval planning → source retrieval
+  → existing core pipeline
+```
+
+Do not attempt to optimize the whole discovery system before this vertical flow
+works. Retrieval optimization (§17) is explicitly deferred.
+
+### 19.4 Result targets — extensibility without scope creep
+Result targets (opportunity, person/relationship, conversation, project, trend)
+remain conceptually extensible (§9). Extensibility **must not** become scope
+creep: the MVP continues to focus on the opportunity/Situation pipeline, and
+separate complete pipelines for every result target **must not** be built during
+Phase 1.
+
+### 19.5 Clarification is a decision mechanism, not an agent
+Clarification (§8) is a single-decision mechanism, **not** a conversational-agent
+architecture. At most one targeted question; the system **must** still proceed if
+the user does not answer. Multi-turn chatbot discovery flows are out of scope.
