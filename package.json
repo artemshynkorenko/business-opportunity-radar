@@ -9,7 +9,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint src tests --ext .ts",
-    "smoke:threads": "npm run build && node --env-file-if-exists=.env dist/scripts/smoke-threads.js"
+    "smoke:threads": "npm run build && node --env-file-if-exists=.env dist/scripts/smoke-threads.js",
+    "smoke:threads:pipeline": "npm run build && node --env-file-if-exists=.env dist/scripts/smoke-threads-pipeline.js"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
