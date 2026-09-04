@@ -1,462 +1,345 @@
-# Search Strategy v0.1
+# Semantic Discovery Architecture v0.2
 
-> **Status:** conceptual/product-architecture document. This file defines *how the
-> Radar decides what to look for*. It does not change any application code, the
-> pipeline, scoring weights, candidate detection, extraction, matching, or the
-> source adapters. Query examples here are **hypotheses**, not validated
-> production configuration.
-
-> **Supersedes:** the earlier "Search Strategy v2" draft, which framed the
-> strategy around a single user (Artem) and conflated search strategy with
-> keyword clusters. Useful generic content from that draft (signal clusters,
-> noise categories, the "score the situation, not the keyword" rule) is
-> preserved below and generalized.
-
----
-
-## 1. Core principle: the Radar is user-configurable
-
-**The Radar is not an "Artem-specific" system.** The same engine must serve
-different people with different interests, goals, capabilities and constraints.
-
-> **Principle:** *The Radar is user-configurable. Opportunity detection is
-> generic; search strategy, ranking and matching are personalized to the active
-> user's profile.*
-
-Concretely:
-
-- **Generic (shared across all users):** the opportunity taxonomy, candidate
-  detection of meaningful signal, situation extraction, and the explicit-vs-
-  inferred evidence discipline.
-- **Personalized (derived from the active user's profile):** the search
-  strategy (what to look for and where), the ranking/scoring emphasis, and the
-  matching of situations to the user's capabilities.
-
-Two illustrative users the engine must both serve without code changes:
-
-- **User A — Artem:** access to Thailand, Russia/CIS, EU and US markets;
-  entrepreneurial and international-trade experience; seeking partnerships,
-  distribution, market entry, sourcing and automation opportunities.
-- **User B — Anton:** interested in filmmaking, food businesses and
-  motorcycles; looking for interesting people, relationships and business
-  partners.
-
-Both configurations are *inputs* to the same engine. Neither is baked into it.
-
-### Relationship to MVP scope (note)
-
-Being "user-configurable" is an **architectural principle**: the profile is a
-configurable input and no single person's preferences are hardwired into the
-engine. This is distinct from building a **multi-user SaaS product** (tenancy,
-auth, billing, dashboards), which `docs/MVP_PLAN.md` correctly lists as an MVP
-non-goal. v0.1 may run for a single active profile at a time; the requirement is
-only that the profile is *data*, not *code*. See the Consistency Check (§16).
+> Canonical specification of how Discovery Radar decides **what the user wants to
+> discover** before deciding **how a source can be searched for it**.
+>
+> Documentation only. This file does not change application code, the pipeline,
+> scoring weights, candidate detection, extraction, matching, or the Threads
+> adapter. Any keyword phrasing shown is an illustrative example of a *downstream
+> retrieval detail*, never the discovery model itself.
+>
+> **Supersedes** the earlier "Search Strategy v0.1 / v2" framing, which conflated
+> the search strategy with keyword clusters and platform queries. Useful generic
+> content (signal families, noise categories, the "score the situation, not the
+> keyword" rule, personalized geography/language) is preserved and re-layered
+> below.
 
 ---
 
-## 2. The four profile dimensions (do not collapse these)
+## 1. Governing boundary
 
-A user profile has four distinct dimensions with different roles in the engine.
-They must remain separate; do not merge them into one generic "preferences" bag.
+> The system must determine **what the user wants to discover** before deciding
+> **how a particular source can be searched** for it.
 
-| Dimension | Question it answers | Primary role in the engine |
-|---|---|---|
-| **Interests** | What is the user interested in? | Increases **discovery relevance** — which domains to explore. |
-| **Goals** | What does the user want to find / achieve? | Determines **which opportunity types** are being sought. |
-| **Capabilities / assets** | What can the user offer others? | Increases **opportunity fit** — how well the user can act on a situation. |
-| **Constraints / preferences** | Geography, languages, availability, relationship type, exclusions | **Filters and modulates** discovery, ranking and matching. |
+Platform-specific queries must never become the semantic representation of the
+user's intent. Meaning flows down the layers; platform detail never flows up.
 
-**Critical distinction — interest ≠ capability.**
-An interest in a domain does **not** imply an ability to act commercially in it.
-
-> Example: Anton being *interested in* motorcycles does not mean he *can
-> distribute* motorcycles. Interest raises discovery relevance for motorcycle-
-> related opportunities; it does not create a "motorcycle distributor"
-> capability. Capabilities are only what the user explicitly declares.
-
-- **Interest** → widens/reweights what we look for.
-- **Goal** → selects the opportunity types worth surfacing.
-- **Capability** → affects `user fit` and the matched roles, and must never be
-  invented from an interest.
-- **Constraint** → geography/language/exclusions that shape and prune results.
-
----
-
-## 3. The conceptual transformation (strategy → queries → results)
-
-Platform queries are an **implementation** of the search strategy, not the
-strategy itself. The full transformation:
+## 2. Canonical flow
 
 ```text
-Active User Profile
-    → Search Strategy               (personalized: what to look for, where, why)
-    → Opportunity Hypotheses        (specific "someone is doing X and needs Y")
-    → Signal Families               (reusable semantic signals, cross-user/platform)
-    → Platform Queries              (platform- and language-specific retrieval)
-    → Retrieved Content
-    → Generic Candidate Detection   (shared engine — unchanged)
-    → Situation Extraction          (shared engine — unchanged)
-    → Personalized Scoring / Matching (weighted toward the active profile)
+Natural Language Intent
+        ↓
+Intent Understanding
+        ↓
+Structured Intent   +   Persistent User Profile
+        ↓
+Opportunity Hypotheses
+        ↓
+Signal Families
+        ↓
+Retrieval Strategy
+        ↓
+Platform-specific Retrieval
+        ↓
+Retrieved Content
+        ↓
+Candidate Detection
+        ↓
+Situation Extraction
+        ↓
+Personalized Scoring / Matching
 ```
 
-Each downward arrow is a *derivation*, not an equality. In particular,
-**interests are not keywords** (see §5), and **queries are a late, disposable
-layer** (see §8).
+The four front-half responsibilities must remain **separate components** (see §9
+and `docs/ARCHITECTURE.md`):
 
-### Three strategy artifacts to keep distinct
+| Layer | Answers |
+|---|---|
+| **Intent Understanding** | *What does the user mean?* |
+| **Search Strategy** (hypotheses + signal families) | *What kinds of situations are worth looking for?* |
+| **Retrieval** (Retrieval Strategy + query building) | *How can the available source be searched for evidence of those situations?* |
+| **Source Adapter** | *How do we communicate with this specific source?* |
 
-1. **Generic Opportunity Taxonomy** — the shared vocabulary of opportunity types
-   (§4). Independent of any user and any platform.
-2. **Personalized Search Strategy** — the mapping from a specific user profile
-   to the opportunity hypotheses and signal families worth pursuing (§6, §7).
-3. **Platform-specific Retrieval Strategy** — how signal families become actual
-   queries against a given platform's API, respecting its capabilities and
-   limits (§8, §9).
+These are not the same component. In particular, intent understanding, search
+strategy, retrieval planning, and source-specific retrieval must not be fused.
 
----
+## 3. Concepts
 
-## 4. Generic Opportunity Taxonomy (user-independent)
+### 3.1 User Intent
+The user's original natural-language request, preserved verbatim as the source
+expression of the current discovery objective. It may be ambiguous or
+incomplete. No interpretation, no keywords.
 
-These categories are shared by all users and independent of Artem. They align
-with the opportunity types already in the domain model and must not be narrowed
-to one person's interests.
+### 3.2 Persistent User Profile
+Durable user context, separate from the current intent. Four distinct dimensions
+(see `docs/PRODUCT_UX.md`): **interests**, **goals**, **capabilities/assets**,
+**constraints/preferences**.
 
-- business partnership
-- distribution
-- market entry
-- joint venture
-- sourcing / procurement
-- manufacturer / supplier
-- operator / project help
-- acquisition / succession
-- automation / operational improvement
-- emerging demand
-- cofounder / business partner
-- interesting projects / people
+- Interests increase discovery relevance.
+- Goals determine which desired situations / result targets are plausible.
+- Capabilities affect user fit / actionability (used downstream by scoring and
+  matching).
+- Constraints filter and prioritize.
 
-A user's *goals* select which of these are actively sought; the taxonomy itself
-never changes per user.
+**Interest is not Capability.** Capabilities must never be inferred from
+interests. The profile influences discovery but is not part of the current
+intent.
 
----
-
-## 5. Interests must not become keywords directly
-
-An interest is a **domain**, not a query. Turning "filmmaking" straight into
-`"filmmaking" OR "camera" OR "cinema"` produces noise and misses real
-opportunities. Instead, expand each interest through hypotheses and signal
-families first:
-
-```text
-interest → relevant opportunity hypotheses → signal families → platform queries
-```
-
-**Illustrative expansions (examples, not a fixed taxonomy):**
-
-- **Filmmaking**
-  - film/project seeking producer or partner
-  - filmmaker seeking financing
-  - production collaboration
-  - local production opportunities
-  - equipment/service business opportunities
-  - distribution opportunities
-  - people looking for collaborators
-- **Food business**
-  - food business partnership
-  - restaurant expansion
-  - food manufacturer / distributor
-  - supplier / buyer relationships
-  - market entry
-  - operational problems
-- **Motorcycles**
-  - motorcycle business partnerships
-  - manufacturing / distribution
-  - dealerships
-  - repair / service businesses
-  - events / projects
-  - communities with commercial opportunities
-
-The point of expansion is to reach *opportunity signal* within a domain rather
-than merely topical chatter about the domain.
-
----
-
-## 6. From user profile to a personalized search strategy
-
-The system derives a personalized strategy from the profile inputs:
-
-- **interests** → candidate domains to explore (discovery relevance)
-- **goals** → which opportunity types to prioritize (from the taxonomy in §4)
-- **capabilities / assets** → expected `user fit` and plausible matched roles
-- **preferred opportunity types** → explicit prioritization overrides
-- **geographies** → personalized geographic weighting/filters (§10)
-- **languages** → which language variants to generate (§11)
-- **constraints** → hard filters and de-prioritization
-- **relationship preferences** → e.g. partner vs. acquaintance vs. supplier
-- **historical feedback** → learned reprioritization over time (§13)
-
-**Roles of the dimensions, restated for the strategy layer:**
-
-- *Interest increases discovery relevance* (explore this domain).
-- *Capability increases opportunity fit* (the user can act here).
-- *Goal determines the opportunity type being sought.*
-
-Capabilities and interests are combined but never conflated: a strong interest
-with no matching capability still surfaces situations (for people/relationships/
-learning), but with lower `user fit` than a situation the user can actually act
-on.
-
----
-
-## 7. Signal families (reusable across users and platforms)
-
-**Signal families are semantic categories of intent, not keyword lists.** They
-are the reusable middle layer between hypotheses and queries, and they are the
-same regardless of which user or platform is active.
-
-Representative signal families:
-
-- seeking partner
-- looking for distributor
-- looking for supplier / manufacturer
-- entering a new market
-- expanding internationally
-- operational pain
-- manual process
-- looking for someone to take responsibility / ownership
-- looking for cofounder
-- seeking producer / operator
-- launching a project
-- acquisition / succession
-- demand exceeding capacity
-- local partner needed
-- collaboration opportunity
-
-Each family is expressed differently per domain, language and platform, but the
-underlying intent is stable. Detection and scoring operate on the *situation*
-these families point to — never on raw keyword presence.
-
----
-
-## 8. Query generation (a late, disposable layer)
-
-Query generation happens **after** strategy, hypotheses and signal families are
-established. A query may be produced from a combination of:
-
-- signal family
-- opportunity hypothesis
-- interest / domain
-- geography
-- language
-- platform capabilities and limits
+### 3.3 Structured Intent
+A semantic representation of the current discovery request. It captures only
+information justified by the user's request and relevant profile context.
+Conceptually it may include: domains; entities; geography; desired situations;
+desired relationship types; result targets; constraints; exclusions; timing;
+specificity. **The exact code structure is deferred to implementation.**
 
 Rules:
+- Every inferred value must remain distinguishable from explicitly stated
+  information (explicit vs inferred vs unknown).
+- Unknown information stays unknown — it is never defaulted into a fabricated
+  requirement.
+- Structured Intent contains **no platform-specific search queries** and is not a
+  disguised list of search terms.
 
-- **Do not** prescribe hundreds of fixed queries.
-- Treat any current exact queries as **hypotheses/examples**, never as validated
-  production configuration.
-- Queries are cheap and disposable; signal families and hypotheses are the
-  durable assets.
+### 3.4 Opportunity Hypothesis
+A meaningful description of a *type of situation* that could satisfy the user's
+discovery objective.
 
----
+Example:
 
-## 9. Threads constraint (approval pending)
+> An established Thai manufacturer is preparing to enter Europe and may need
+> local commercial, distribution, or strategic support.
 
-The current Threads integration uses the **official Threads API**. Public
-keyword search is **not yet fully available** because Meta App Review /
-permission approval (`threads_keyword_search`) is still pending.
+- A single intent may produce **multiple** hypotheses.
+- Hypotheses may be **weighted / prioritized**.
+- Capabilities may affect how **actionable** a hypothesis is for a particular
+  user, but capabilities must **not invent** hypotheses unsupported by the
+  user's intent.
 
-Therefore v0.1 defines the search strategy **independently of current retrieval
-results**. In particular, **do not** optimize the query list based on the
-present own-post-only test data — that data is not representative of public
-search.
+A hypothesis is **not** a keyword, a query, a signal family, a post, or a score.
 
-Once public Threads search is available, the refinement process is:
+### 3.5 Signal Family
+A reusable, platform-independent **semantic** category of observable evidence
+that a relevant situation exists. Representative families:
 
-1. run the initial strategy against real public data;
-2. measure recall/precision qualitatively;
-3. inspect false positives and false negatives;
-4. refine signal families and query generation;
-5. evaluate **TOP vs RECENT**;
-6. evaluate language/geography variants;
-7. add semantic expansion where useful;
-8. only then establish a production query budget.
+- international expansion
+- distribution need
+- market-entry difficulty
+- sourcing / manufacturing need
+- operational pain
+- automation opportunity
+- succession / acquisition
+- explicit partner search
+- demand exceeding capacity
+- local partner needed
+- collaboration opportunity / project launch
 
-**TOP vs RECENT is a retrieval-strategy decision, not a universal constant.** It
-may differ by signal family, domain, geography or user.
+A signal family is **not** a retrieval query and **not** a detection rule. The
+same family may later be expressed through many different platform-specific
+queries.
 
----
+> **Transitional note:** the current `SIGNAL_FAMILIES` structure in
+> `src/web/intent-to-strategy.ts` mixes three responsibilities — intent triggers,
+> semantic meaning, and retrieval queries. These must eventually be separated:
+> triggers belong to Intent Understanding, the semantic family belongs here, and
+> queries belong to Retrieval Strategy.
 
-## 10. Geography (personalized)
+### 3.6 Retrieval Strategy
+The layer that decides **how** to retrieve evidence for the semantic hypotheses
+from available sources. Platform-specific query wording belongs here or below it
+(in the source adapter). It may eventually contain retrieval objectives, source
+selection, retrieval mode (e.g. RECENT vs TOP), query concepts and their platform
+variants, search budget, recency, and retrieval priority — **fields are not
+fixed here.**
 
-Geography belongs to the user profile, not the engine.
+Key rule: Retrieval Strategy is strictly **downstream** of semantic
+understanding. Changing Threads retrieval mechanics (keyword phrasing, mode,
+budget) or adding another source must be possible **without changing** the
+meaning of the user's intent.
 
-- For **Artem**, the existing priorities (Thailand 10, Russia/CIS 10, EU 8, SEA
-  8, USA 7, rest 5; multiplier, not a hard filter) are one **example** user
-  configuration.
-- For **Anton**, geography is configured independently and may be entirely
-  different.
+## 4. What may cross each boundary
 
-Do **not** bake any single user's geographic priorities into the generic engine.
+- Intent Understanding emits **Structured Intent only** — semantic fields with
+  provenance, no keywords.
+- Search Strategy emits **weighted hypotheses + referenced signal families** —
+  still semantic, no queries.
+- Retrieval Strategy is the **first** place platform terms/queries/modes appear.
+- Only source-independent **NormalizedContent** crosses back up from retrieval
+  into the existing core pipeline.
 
----
+## 5. Worked example (one intent, every level)
 
-## 11. Language (personalized)
+User: *"I'm looking for Thai manufacturers that want to expand into Europe."*
 
-Initial supported languages: **English, Russian, Thai**. Language selection is
-part of the user/search strategy, not a hardwired "Artem's languages" list; a
-different user may use a different subset or additional languages.
+```text
+Structured Intent (semantic; no queries):
+  domains: [manufacturing] (explicit)
+  entities: [{type: manufacturer}] (explicit)
+  geography: [{Thailand, origin, explicit}, {Europe, target, explicit}]
+  desiredSituations: [european-expansion] (explicit)
+  desiredRelationshipTypes: []            ← not stated; left unknown
+  specificity: partial
 
-- Generate native-language query variants where possible.
-- **Preserve the original content language**; never assume translation upstream
-  of extraction.
+Opportunity Hypotheses (weighted; semantic):
+  H1: An established Thai manufacturer preparing to enter Europe may seek a local
+      commercial / distribution / strategic partner.
+  H2: A Thai manufacturer discussing European expansion but lacking local
+      market-entry capability.
 
----
+Signal Families (semantic):
+  [international-expansion, distribution-need, market-entry-difficulty,
+   explicit-partner-search]
 
-## 12. Negative signals (generic + personal exclusions)
+Retrieval Strategy (DOWNSTREAM — platform detail begins here; illustrative):
+  objective: gather evidence for H1/H2 via the families above
+  Threads query concepts → variants: "Thai manufacturer expanding to Europe",
+     "looking for EU distributor", "entering European market"
+  mode: RECENT; small bounded budget
+```
 
-Generic noise categories (shared default, reused from the prior draft):
+The earlier levels contain no platform queries; only Retrieval Strategy does.
 
-- motivational content
-- get-rich-quick
-- MLM
-- crypto / Web3 as the main topic
-- career / job seeking
-- generic networking
-- political content
-- generic AI hype
-- generic startup announcements without meaningful signal
+## 6. Explicit vs inferred vs unknown
 
-In addition, each user may define **personal exclusions** (topics, domains,
-relationship types) layered on top of the generic set. Personal exclusions are a
-constraint dimension, not a change to the generic detector.
+The explicit/inferred distinction is mandatory and must be preserved end-to-end
+(consistent with `docs/DATA_MODEL.md` Evidence and the core's evidence rules).
+For the example above:
 
----
+- **Explicit:** Thailand; manufacturers; European expansion.
+- **Inferred:** possible need for a partner/distributor/local capability.
+- **Unknown:** whether the user specifically wants a distributor, JV,
+  acquisition, or supplier relationship; business stage; timing.
 
-## 13. Search budget (conceptual allocation)
+Reasonable inference must never be promoted to false certainty.
 
-A limited platform query/search budget will eventually need allocation. **Do not
-fix numeric values without empirical data.** Conceptually prioritize:
+## 7. Personalization: same intent, different profile
 
-1. high expected opportunity value;
-2. strong user fit;
-3. high information gain;
-4. under-explored signal families;
-5. geographic / language relevance;
-6. feedback history.
+The intent's **meaning does not change** with the profile. What changes is
+hypothesis **weighting**, capability **annotation**, and the existing downstream
+scoring/matching.
 
-The budget is allocated across *signal families and hypotheses*, then realized
-as queries — not distributed across a static keyword list.
+- **Artem** (EU/Thailand/international-trade capabilities): H1 is highly
+  actionable → higher weight; downstream `userFit` is high and matching yields
+  distributor / market-entry roles.
+- **Anton** (motorcycle interest, no declared capabilities): no capability
+  supports acting on H1 → low weight; downstream `userFit` is 0 and matching
+  returns nothing.
 
----
+This divergence is produced by the **existing** profile-driven scorer/matcher —
+the semantic layer only sets *what to retrieve* and *hypothesis weight*. **No
+scoring change is required or permitted for this** (see §11).
 
-## 14. Feedback loop
+## 8. Clarification
 
-Search strategy must eventually **adapt from user feedback**. Possible feedback
-signals:
+Clarification is offered only when resolving an ambiguity is likely to
+**materially** improve discovery quality. The decision is made from Structured
+Intent using:
 
-- interesting
-- not interesting
-- already known
-- irrelevant
-- wrong type
-- wrong geography
-- wrong stage
-- too weak
-- high-value
+1. **specificity** — `underspecified` is a strong trigger; `specific` rarely is.
+2. **actionable divergence** — do the plausible hypotheses imply *materially
+   different* retrieval? If they would retrieve nearly the same evidence, do not
+   ask.
+3. **profile sufficiency** — for underspecified intents, can the profile supply
+   enough to form at least one reasonable, on-interest hypothesis? If yes, prefer
+   proceeding (labeled exploratory) over asking.
 
-Feedback should modify **future search prioritization** — reweighting signal
-families, hypotheses, geographies and domains — rather than simply deleting
-individual keywords. Feedback learning is future work (§15); this section
-defines intent only.
+At most one targeted question, resolving exactly one of: primary domain, result
+target, or the single most divergent desired relationship type. The system must
+always be able to proceed without the answer. This is a decision rule over
+Structured Intent, **not** a conversational agent.
 
----
+Underspecified intents (e.g. *"something interesting in Thailand"*) must **not**
+be silently converted into *"looking for a business partner."* Use profile
+context (tagged as profile-derived) to explore, or ask one scoping question.
 
-## 15. Example personalized strategies (user configurations, not engine logic)
+## 9. Result targets
 
-> These are **example user configurations** that exercise the generic engine.
-> They are illustrative, not system logic, and not a fixed query set.
+The semantic model is designed to represent **more than one discovery target**
+(opportunity, person/relationship, conversation, project, trend) so that
+non-opportunity intents are not coerced into opportunity framing. This is an
+**extensibility principle**: v1 keeps the existing opportunity/Situation pipeline
+as the primary fulfilled target; separate pipelines for every target are not
+built now. See `docs/PRODUCT_UX.md`.
 
-### 15.1 Artem (example profile)
+## 10. Generic opportunity taxonomy (preserved, user-independent)
 
-- **Interests:** international trade, distribution, manufacturing, automation.
-- **Goals:** become partner in an existing business; distribution; market entry;
-  sourcing; automation; acquisition/succession; cofounder.
-- **Capabilities (declared):** EU market access, Thailand access, Russia/CIS
-  access, US market access, Czech export/import company, US LLC, entrepreneurial
-  and international-business experience, project launch/organization, remote
-  capability, automation/n8n interest.
-- **Geographies:** Thailand, Russia/CIS, EU, SEA, USA (priorities as in §10).
-- **Languages:** English, Russian, Thai.
-- **Derived hypotheses (examples):** Thai manufacturer seeking EU distribution;
-  factory owner seeking successor/partner; SEA founder seeking market entry;
-  business with operational pain suitable for automation.
-- **Signal families emphasized:** looking for distributor, entering a new
-  market, seeking partner, acquisition/succession, operational pain,
-  demand exceeding capacity.
+These generic categories are shared across all users and independent of any one
+person. They align with the opportunity types in the domain model and must not
+be narrowed to one user's interests:
 
-### 15.2 Anton (example profile)
+business partnership · distribution · market entry · joint venture ·
+sourcing/procurement · manufacturer/supplier · operator/project help ·
+acquisition/succession · automation/operational improvement · emerging demand ·
+cofounder/business partner · interesting projects/people.
 
-- **Interests:** filmmaking, food business, motorcycles.
-- **Goals:** meet interesting people; find business partners; discover projects.
-- **Capabilities (declared):** *none provided.* Do **not** infer that Anton is a
-  distributor, filmmaker, mechanic, investor, financier, or operator. Absence of
-  a declared capability means the engine surfaces relevant people/opportunities
-  around his interests **without** asserting what he can offer.
-- **Geographies:** independently configurable (not Artem's).
-- **Languages:** independently configurable.
-- **Derived hypotheses (examples):** a film project seeking a producer/partner; a
-  food business seeking a partner or expansion help; a motorcycle
-  community/project with a collaboration opportunity; people seeking
-  collaborators in these domains.
-- **Signal families emphasized:** seeking partner, collaboration opportunity,
-  launching a project, seeking producer/operator, local partner needed.
-- **Effect on scoring/matching:** interest raises discovery relevance for these
-  domains; because no capabilities are declared, `user fit` and matched roles
-  stay conservative and no unsupported "offer" is attributed to Anton.
+A user's goals select which of these are actively sought; the taxonomy itself
+never changes per user.
 
----
+## 11. Negative signals (generic + personal exclusions)
 
-## 16. What must NOT be fixed in v0.1 (empirical / future work)
+Generic noise categories (rejected by the existing detector): motivational
+content, get-rich-quick, MLM, crypto/Web3 as the main topic, career/job seeking,
+generic networking, political content, generic AI hype, generic startup
+announcements without meaningful signal. Users may additionally define personal
+**exclusions** as a constraint dimension.
 
-The following remain intentionally open and are to be settled empirically after
-public retrieval is available:
+## 12. Geography and language (personalized)
 
-- the final Threads query list;
-- the exact number of queries per user;
-- the exact weighting of query families;
-- the TOP vs RECENT split;
-- the semantic-expansion algorithm;
-- the automatic query-generation implementation;
-- the feedback-learning algorithm;
-- the final retrieval precision/recall;
-- cross-platform query-normalization details.
+Geography and language belong to the user profile, not the engine. Artem's
+priorities (Thailand/Russia/CIS high, EU/SEA, USA, rest) are one **example**
+profile, not a system default. Preserve original content language; never assume
+translation upstream of extraction.
 
----
+## 13. LLM policy
 
-## 17. Consistency check
+**Intent Understanding is an abstraction whose implementation may be
+deterministic, model-based, or hybrid.** The semantic architecture must not
+depend on any particular AI provider, and an LLM is **not** a required
+architectural dependency. The choice of implementation is made separately, based
+on evaluation. The initial implementation may remain deterministic.
 
-This document is consistent with the current system and changes none of it:
+## 14. Scoring policy
 
-- **Source-independent architecture** — search strategy lives *above* retrieval;
-  signal families and taxonomy are platform-agnostic. Platform queries are the
-  only platform-specific layer, matching `docs/ARCHITECTURE.md`.
-- **MVP Core v0.1 scope** — this is documentation only. "User-configurable" is an
-  architectural principle (profile as data), explicitly distinguished from the
-  "multi-user SaaS layer" non-goal in `docs/MVP_PLAN.md` (see §1 note).
-- **Scoring weights** — unchanged; §6/§15 reference `user fit`, `geography`, etc.
-  by role only and do not alter the weight table in `docs/DATA_MODEL.md`.
-- **Generic opportunity taxonomy** — §4 preserves the existing categories and
-  keeps them user-independent.
-- **Explicit vs inferred evidence** — §2 and §15.2 reinforce that capabilities
-  are never inferred from interests, consistent with the evidence rules.
-- **Threads API constraints** — §9 records the pending approval and forbids
-  tuning strategy to non-representative own-post-only data.
+Existing scoring weights and thresholds are **unchanged**. The semantic discovery
+work must not be used as a reason to retune scoring. Ranking changes are
+evaluated separately against real data (see `docs/MVP_PLAN.md` Phase 7).
 
-### Documentation conflict flagged (not silently changed)
+## 15. Threads / source policy
 
-`docs/MVP_PLAN.md` lists a "multi-user SaaS layer" as an MVP non-goal, while this
-task requires a user-configurable, multi-profile architecture. These are
-reconciled in §1: the requirement is architectural (profile is configurable
-data; the engine is not hardwired to one person), **not** a mandate to build SaaS
-tenancy/auth/billing in v0.1. No change was made to `docs/MVP_PLAN.md` or to
-`.kiro/steering/*`; this reconciliation is documented here for review.
+Threads is a **source adapter**, not the discovery model. The semantic
+architecture is source-independent and must not assume all future sources behave
+like Threads (which currently offers constrained retrieval). Threads keyword
+search availability depends on Meta App Review approval of
+`threads_keyword_search`. Existing constraints remain: official APIs only,
+read-only, no scraping, no automated outreach/posting/commenting/messaging.
+
+Refinement process once public Threads search is available: run the strategy
+against real public data; measure recall/precision qualitatively; inspect false
+positives/negatives; refine signal families and query generation; evaluate TOP vs
+RECENT; evaluate language/geography variants; add semantic expansion where
+useful; only then set a production query budget.
+
+## 16. `src/web/intent-to-strategy.ts` status
+
+The current `intent-to-strategy.ts` is a **transitional deterministic
+implementation**, not the target architecture. It conflates intent understanding,
+domain/geography extraction, signal-family selection, hypothesis labeling, and
+platform query construction into one function. It is retained as a working demo
+bridge and will be decomposed along the boundaries in §2/§9 in later phases. Do
+not treat its hardcoded trigger list or keyword queries as the product's
+discovery model.
+
+## 17. What must NOT be fixed prematurely
+
+Final Threads query lists; queries-per-user; family weighting; TOP vs RECENT
+split; semantic-expansion algorithm; automatic query generation; feedback-learning
+algorithm; real retrieval precision/recall; cross-platform query normalization.
+These are settled empirically after public retrieval exists (Phase 7+).
+
+## 18. Consistency with the existing core
+
+This document changes nothing in the source-independent core. The following are
+already correct and are not to be rewritten by this work: source-independent
+core, `NormalizedContent`, deduplication, candidate detection, Situation
+extraction, scoring, profile-driven matching, and Threads adapter isolation. The
+new work is the **front half of discovery** (intent → hypotheses → signal
+families → retrieval strategy).
