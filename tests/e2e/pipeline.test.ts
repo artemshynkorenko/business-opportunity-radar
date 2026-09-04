@@ -9,7 +9,7 @@ import { RelationshipConfidenceCalculator } from '../../src/scoring/relationship
 import { CapabilityBasedMatcher } from '../../src/matching/capability-based-matcher.js';
 import { DefaultOpportunityCardFormatter } from '../../src/cards/default-card-formatter.js';
 import { SituationRepository } from '../../src/persistence/repositories.js';
-import { USER_CAPABILITIES } from '../../src/matching/user-capabilities.js';
+import { ARTEM_PROFILE } from '../../src/matching/profiles.js';
 import type { Author } from '../../src/domain/index.js';
 import {
   F01_THAI_MANUFACTURER, A01_THAI_MANUFACTURER,
@@ -53,7 +53,7 @@ function createPipeline(situationRepository?: SituationRepository) {
       if (!author) throw new Error(`Unknown author: ${authorId}`);
       return author;
     },
-    USER_CAPABILITIES,
+    ARTEM_PROFILE,
     situationRepository
   );
 }
@@ -337,7 +337,7 @@ describe('End-to-End Pipeline', () => {
           if (!author) throw new Error(`Unknown author: ${authorId}`);
           return author;
         },
-        USER_CAPABILITIES
+        ARTEM_PROFILE
       );
       // First run — all unique
       const first = await sharedPipeline.run(ALL_FIXTURES, 'fixture');

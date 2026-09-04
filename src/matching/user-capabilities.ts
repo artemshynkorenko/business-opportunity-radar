@@ -1,8 +1,11 @@
 import type { UserCapability } from '../domain/index.js';
 
 /**
- * Canonical user capability list for the radar owner.
- * These are the capabilities the system matches opportunities against.
+ * Example capability list for one user (Artem).
+ *
+ * This is a development/demo fixture, NOT system configuration. The generic
+ * engine must never import this directly; it receives a UserProfile as data.
+ * Retained (and exported) because existing profiles compose from it.
  */
 export const USER_CAPABILITIES: UserCapability[] = [
   {

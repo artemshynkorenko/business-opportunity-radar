@@ -4,7 +4,8 @@ import { RelationshipConfidenceCalculator } from '../../src/scoring/relationship
 import { SCORE_WEIGHTS } from '../../src/scoring/score-weights.js';
 import { FixtureNormalizer } from '../../src/normalization/fixture-normalizer.js';
 import { DeterministicSituationExtractor } from '../../src/extraction/deterministic-extractor.js';
-import { USER_CAPABILITIES } from '../../src/matching/user-capabilities.js';
+import { ARTEM_PROFILE } from '../../src/matching/profiles.js';
+import type { UserProfile } from '../../src/domain/index.js';
 import {
   F01_THAI_MANUFACTURER,
   A01_THAI_MANUFACTURER,
@@ -51,14 +52,14 @@ describe('SCORE_WEIGHTS', () => {
 describe('WeightedOpportunityScorer', () => {
   it('returns total between 0 and 100', () => {
     const situation = extractSituation(F01_THAI_MANUFACTURER, A01_THAI_MANUFACTURER);
-    const score = scorer.score(situation, USER_CAPABILITIES);
+    const score = scorer.score(situation, ARTEM_PROFILE);
     expect(score.total).toBeGreaterThanOrEqual(0);
     expect(score.total).toBeLessThanOrEqual(100);
   });
 
   it('breakdown keys match SCORE_WEIGHTS keys', () => {
     const situation = extractSituation(F01_THAI_MANUFACTURER, A01_THAI_MANUFACTURER);
-    const score = scorer.score(situation, USER_CAPABILITIES);
+    const score = scorer.score(situation, ARTEM_PROFILE);
     for (const key of Object.keys(SCORE_WEIGHTS)) {
       expect(score.breakdown).toHaveProperty(key);
     }
@@ -66,7 +67,7 @@ describe('WeightedOpportunityScorer', () => {
 
   it('breakdown scores do not exceed their weight', () => {
     const situation = extractSituation(F01_THAI_MANUFACTURER, A01_THAI_MANUFACTURER);
-    const score = scorer.score(situation, USER_CAPABILITIES);
+    const score = scorer.score(situation, ARTEM_PROFILE);
     for (const [key, entry] of Object.entries(score.breakdown)) {
       expect(entry.score).toBeGreaterThanOrEqual(0);
       expect(entry.score).toBeLessThanOrEqual(entry.weight + 1); // +1 for rounding
@@ -76,7 +77,7 @@ describe('WeightedOpportunityScorer', () => {
 
   it('each breakdown entry has a non-empty explanation', () => {
     const situation = extractSituation(F01_THAI_MANUFACTURER, A01_THAI_MANUFACTURER);
-    const score = scorer.score(situation, USER_CAPABILITIES);
+    const score = scorer.score(situation, ARTEM_PROFILE);
     for (const entry of Object.values(score.breakdown)) {
       expect(entry.explanation).toBeTruthy();
       expect(entry.explanation.length).toBeGreaterThan(5);
@@ -86,45 +87,55 @@ describe('WeightedOpportunityScorer', () => {
   it('F01 Thai manufacturer scores higher than F03 restaurant automation', () => {
     const s1 = extractSituation(F01_THAI_MANUFACTURER, A01_THAI_MANUFACTURER);
     const s3 = extractSituation(F03_RESTAURANT_AUTOMATION, A03_RESTAURANT);
-    const score1 = scorer.score(s1, USER_CAPABILITIES);
-    const score3 = scorer.score(s3, USER_CAPABILITIES);
+    const score1 = scorer.score(s1, ARTEM_PROFILE);
+    const score3 = scorer.score(s3, ARTEM_PROFILE);
     // Thai manufacturer with established biz should outscore restaurant automation
     expect(score1.total).toBeGreaterThan(score3.total);
   });
 
   it('F02 Russian SaaS scores high due to geography and user fit', () => {
     const situation = extractSituation(F02_RUSSIAN_SAAS, A02_RUSSIAN_SAAS);
-    const score = scorer.score(situation, USER_CAPABILITIES);
+    const score = scorer.score(situation, ARTEM_PROFILE);
     // Russia/CIS + EU + partnership should get substantial score
     expect(score.total).toBeGreaterThan(30);
   });
 
   it('F05 Thai succession gets high geography score', () => {
     const situation = extractSituation(F05_THAI_SUCCESSION, A05_THAI_FACTORY);
-    const score = scorer.score(situation, USER_CAPABILITIES);
+    const score = scorer.score(situation, ARTEM_PROFILE);
     expect(score.breakdown.geography.score).toBeGreaterThan(0);
   });
 
   it('geography factor: Thailand scores higher than unknown geography', () => {
     const thaiSit = extractSituation(F01_THAI_MANUFACTURER, A01_THAI_MANUFACTURER);
     thaiSit.geographies = ['Unknown'];
-    const score1 = scorer.score(thaiSit, USER_CAPABILITIES);
+    const score1 = scorer.score(thaiSit, ARTEM_PROFILE);
     
     const thaiSit2 = extractSituation(F01_THAI_MANUFACTURER, A01_THAI_MANUFACTURER);
-    const score2 = scorer.score(thaiSit2, USER_CAPABILITIES);
+    const score2 = scorer.score(thaiSit2, ARTEM_PROFILE);
     
     expect(score2.breakdown.geography.score).toBeGreaterThan(score1.breakdown.geography.score);
   });
 
   it('score with no user capabilities returns low userFit score', () => {
     const situation = extractSituation(F01_THAI_MANUFACTURER, A01_THAI_MANUFACTURER);
-    const score = scorer.score(situation, []);
+    const emptyProfile: UserProfile = {
+      id: 'empty',
+      displayName: 'Empty',
+      interests: [],
+      goals: [],
+      capabilities: [],
+      geographies: [],
+      languages: [],
+      exclusions: [],
+    };
+    const score = scorer.score(situation, emptyProfile);
     expect(score.breakdown.userFit.score).toBe(0);
   });
 
   it('returns non-empty explanation string', () => {
     const situation = extractSituation(F01_THAI_MANUFACTURER, A01_THAI_MANUFACTURER);
-    const score = scorer.score(situation, USER_CAPABILITIES);
+    const score = scorer.score(situation, ARTEM_PROFILE);
     expect(score.explanation).toBeTruthy();
   });
 });

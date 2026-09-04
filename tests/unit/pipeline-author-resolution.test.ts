@@ -8,7 +8,7 @@ import { WeightedOpportunityScorer } from '../../src/scoring/weighted-opportunit
 import { RelationshipConfidenceCalculator } from '../../src/scoring/relationship-confidence-calculator.js';
 import { CapabilityBasedMatcher } from '../../src/matching/capability-based-matcher.js';
 import { DefaultOpportunityCardFormatter } from '../../src/cards/default-card-formatter.js';
-import { USER_CAPABILITIES } from '../../src/matching/user-capabilities.js';
+import { ARTEM_PROFILE } from '../../src/matching/profiles.js';
 import type { Author } from '../../src/domain/index.js';
 import {
   F01_THAI_MANUFACTURER, A01_THAI_MANUFACTURER,
@@ -32,7 +32,7 @@ function makePipeline(resolver: (authorId: string) => Promise<Author>) {
     new CapabilityBasedMatcher(),
     new DefaultOpportunityCardFormatter(),
     resolver,
-    USER_CAPABILITIES
+    ARTEM_PROFILE
   );
 }
 

@@ -387,35 +387,36 @@ export class DeterministicSituationExtractor implements SituationExtractorInterf
   // -------------------------------------------------------------------------
   // Possible actions
   // -------------------------------------------------------------------------
+  /**
+   * Generic, situation-level possibilities implied by the opportunity types.
+   *
+   * These describe what the SITUATION invites in general terms. They are NOT
+   * recommendations tailored to any specific user's capabilities — user-specific
+   * offers/next-actions belong to personalized matching and card generation.
+   */
   private derivePossibleActions(
     opportunityTypes: OpportunityType[],
-    geographies: string[]
+    _geographies: string[]
   ): string[] {
     const actions: string[] = [];
-    const hasThailand = geographies.includes('Thailand');
-    const hasEU = geographies.includes('EU') || geographies.includes('Czech Republic');
-    const hasRussia = geographies.includes('Russia');
 
     if (opportunityTypes.includes('distribution')) {
-      actions.push('Reach out to discuss distribution arrangement');
-      if (hasThailand && hasEU) {
-        actions.push('Offer Czech export/import company as EU distribution vehicle');
-      }
+      actions.push('Discuss a distribution arrangement');
     }
     if (opportunityTypes.includes('market-entry')) {
-      actions.push('Offer market-entry consultation and local network');
+      actions.push('Explore market-entry support and local presence');
     }
     if (opportunityTypes.includes('partnership')) {
-      actions.push('Initiate conversation about partnership structure');
+      actions.push('Discuss partnership structure');
+    }
+    if (opportunityTypes.includes('sourcing')) {
+      actions.push('Discuss sourcing / manufacturing options');
     }
     if (opportunityTypes.includes('automation')) {
-      actions.push('Propose automation assessment and n8n implementation');
+      actions.push('Discuss process automation opportunities');
     }
     if (opportunityTypes.includes('succession') || opportunityTypes.includes('acquisition')) {
-      actions.push('Express interest in acquisition/succession discussion');
-    }
-    if (hasRussia) {
-      actions.push('Leverage Russia/CIS market access for introduction');
+      actions.push('Explore an acquisition/succession discussion');
     }
     if (actions.length === 0) {
       actions.push('Research further and engage in conversation');

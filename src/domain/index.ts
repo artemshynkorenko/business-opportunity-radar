@@ -177,6 +177,49 @@ export interface UserCapability {
 }
 
 // ---------------------------------------------------------------------------
+// User Profile
+// ---------------------------------------------------------------------------
+
+/**
+ * A geography the active user cares about, with a relative priority weight.
+ * `weight` is on the same 0–10 scale the scorer uses for geographic relevance.
+ */
+export interface GeoPriority {
+  region: string;
+  weight: number; // 0–10
+}
+
+/**
+ * The active user's profile — the single piece of user-specific data the
+ * generic engine consumes. The engine depends on this abstraction, never on a
+ * specific person's configuration.
+ *
+ * The four dimensions are kept distinct (see docs/SEARCH_STRATEGY.md):
+ *  - interests    → what the user is interested in (discovery relevance)
+ *  - goals        → what the user wants to find (opportunity types sought)
+ *  - capabilities → what the user can offer (opportunity fit)
+ *  - constraints  → geographies / languages / exclusions
+ *
+ * Interests must never be treated as capabilities.
+ */
+export interface UserProfile {
+  id: string;
+  displayName: string;
+  /** Domains the user is interested in. Increases discovery relevance only. */
+  interests: string[];
+  /** Opportunity types / outcomes the user is seeking. */
+  goals: string[];
+  /** What the user can offer. May be empty when unknown. */
+  capabilities: UserCapability[];
+  /** Personalized geographic priorities. Empty ⇒ neutral geographic weighting. */
+  geographies: GeoPriority[];
+  /** Languages relevant to the user's search strategy. */
+  languages: string[];
+  /** Personal negative signals / topics to exclude. */
+  exclusions: string[];
+}
+
+// ---------------------------------------------------------------------------
 // Match
 // ---------------------------------------------------------------------------
 

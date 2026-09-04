@@ -1,4 +1,4 @@
-import type { Situation, UserCapability, Match, MatchType } from '../domain/index.js';
+import type { Situation, UserProfile, UserCapability, Match, MatchType } from '../domain/index.js';
 import type { UserMatcherInterface } from './user-matcher-interface.js';
 
 /**
@@ -30,7 +30,8 @@ const MIN_MATCH_SCORE = 20;
  * Returns empty array if no meaningful match exists.
  */
 export class CapabilityBasedMatcher implements UserMatcherInterface {
-  match(situation: Situation, capabilities: UserCapability[]): Match[] {
+  match(situation: Situation, profile: UserProfile): Match[] {
+    const capabilities = profile.capabilities;
     if (capabilities.length === 0) return [];
 
     const matches: Match[] = [];

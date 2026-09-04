@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { CapabilityBasedMatcher } from '../../src/matching/capability-based-matcher.js';
-import { USER_CAPABILITIES } from '../../src/matching/user-capabilities.js';
+import { ARTEM_PROFILE } from '../../src/matching/profiles.js';
 import { FixtureNormalizer } from '../../src/normalization/fixture-normalizer.js';
 import { DeterministicSituationExtractor } from '../../src/extraction/deterministic-extractor.js';
 import { WeightedOpportunityScorer } from '../../src/scoring/weighted-opportunity-scorer.js';
@@ -14,7 +14,7 @@ import {
   F05_THAI_SUCCESSION,
   A05_THAI_FACTORY,
 } from '../fixtures/raw-fixtures.js';
-import type { Situation, Author } from '../../src/domain/index.js';
+import type { Situation, Author, UserProfile } from '../../src/domain/index.js';
 
 const matcher = new CapabilityBasedMatcher();
 const normalizer = new FixtureNormalizer();
@@ -24,7 +24,7 @@ const scorer = new WeightedOpportunityScorer();
 function prepareSituation(raw: unknown, author: Author): Situation {
   const content = normalizer.normalize(raw, 'fixture');
   const situation = extractor.extract(content, author, 'run-test');
-  situation.opportunityScore = scorer.score(situation, USER_CAPABILITIES);
+  situation.opportunityScore = scorer.score(situation, ARTEM_PROFILE);
   return situation;
 }
 
@@ -32,7 +32,7 @@ describe('CapabilityBasedMatcher', () => {
   describe('positive matches', () => {
     it('F01 Thai manufacturer — finds match (distributor or market-entry-partner)', () => {
       const situation = prepareSituation(F01_THAI_MANUFACTURER, A01_THAI_MANUFACTURER);
-      const matches = matcher.match(situation, USER_CAPABILITIES);
+      const matches = matcher.match(situation, ARTEM_PROFILE);
       expect(matches.length).toBeGreaterThan(0);
       const roles = matches.map((m) => m.matchType);
       expect(roles.some((r) => ['distributor', 'market-entry-partner', 'partner', 'sourcing-partner'].includes(r))).toBe(true);
@@ -40,7 +40,7 @@ describe('CapabilityBasedMatcher', () => {
 
     it('F02 Russian SaaS — finds match (partner or market-entry-partner)', () => {
       const situation = prepareSituation(F02_RUSSIAN_SAAS, A02_RUSSIAN_SAAS);
-      const matches = matcher.match(situation, USER_CAPABILITIES);
+      const matches = matcher.match(situation, ARTEM_PROFILE);
       expect(matches.length).toBeGreaterThan(0);
       const roles = matches.map((m) => m.matchType);
       expect(roles.some((r) => ['partner', 'market-entry-partner', 'distributor'].includes(r))).toBe(true);
@@ -48,7 +48,7 @@ describe('CapabilityBasedMatcher', () => {
 
     it('F03 restaurant — finds automation-implementer match', () => {
       const situation = prepareSituation(F03_RESTAURANT_AUTOMATION, A03_RESTAURANT);
-      const matches = matcher.match(situation, USER_CAPABILITIES);
+      const matches = matcher.match(situation, ARTEM_PROFILE);
       expect(matches.length).toBeGreaterThan(0);
       const roles = matches.map((m) => m.matchType);
       expect(roles).toContain('automation-implementer');
@@ -56,7 +56,7 @@ describe('CapabilityBasedMatcher', () => {
 
     it('F05 Thai succession — finds partner match', () => {
       const situation = prepareSituation(F05_THAI_SUCCESSION, A05_THAI_FACTORY);
-      const matches = matcher.match(situation, USER_CAPABILITIES);
+      const matches = matcher.match(situation, ARTEM_PROFILE);
       expect(matches.length).toBeGreaterThan(0);
       const roles = matches.map((m) => m.matchType);
       expect(roles).toContain('partner');
@@ -66,7 +66,7 @@ describe('CapabilityBasedMatcher', () => {
   describe('match quality', () => {
     it('each match has a non-empty explanation', () => {
       const situation = prepareSituation(F01_THAI_MANUFACTURER, A01_THAI_MANUFACTURER);
-      const matches = matcher.match(situation, USER_CAPABILITIES);
+      const matches = matcher.match(situation, ARTEM_PROFILE);
       for (const match of matches) {
         expect(match.explanation).toBeTruthy();
         expect(match.explanation.length).toBeGreaterThan(10);
@@ -75,7 +75,7 @@ describe('CapabilityBasedMatcher', () => {
 
     it('compatibility scores are between 0 and 100', () => {
       const situation = prepareSituation(F01_THAI_MANUFACTURER, A01_THAI_MANUFACTURER);
-      const matches = matcher.match(situation, USER_CAPABILITIES);
+      const matches = matcher.match(situation, ARTEM_PROFILE);
       for (const match of matches) {
         expect(match.compatibilityScore).toBeGreaterThanOrEqual(0);
         expect(match.compatibilityScore).toBeLessThanOrEqual(100);
@@ -84,7 +84,7 @@ describe('CapabilityBasedMatcher', () => {
 
     it('matches reference correct situationId', () => {
       const situation = prepareSituation(F01_THAI_MANUFACTURER, A01_THAI_MANUFACTURER);
-      const matches = matcher.match(situation, USER_CAPABILITIES);
+      const matches = matcher.match(situation, ARTEM_PROFILE);
       for (const match of matches) {
         expect(match.situationId).toBe(situation.situationId);
       }
@@ -92,8 +92,8 @@ describe('CapabilityBasedMatcher', () => {
 
     it('matches reference a valid capabilityId from the provided list', () => {
       const situation = prepareSituation(F01_THAI_MANUFACTURER, A01_THAI_MANUFACTURER);
-      const matches = matcher.match(situation, USER_CAPABILITIES);
-      const capIds = USER_CAPABILITIES.map((c) => c.capabilityId);
+      const matches = matcher.match(situation, ARTEM_PROFILE);
+      const capIds = ARTEM_PROFILE.capabilities.map((c) => c.capabilityId);
       for (const match of matches) {
         expect(capIds).toContain(match.capabilityId);
       }
@@ -101,7 +101,7 @@ describe('CapabilityBasedMatcher', () => {
 
     it('matches are sorted by score descending', () => {
       const situation = prepareSituation(F01_THAI_MANUFACTURER, A01_THAI_MANUFACTURER);
-      const matches = matcher.match(situation, USER_CAPABILITIES);
+      const matches = matcher.match(situation, ARTEM_PROFILE);
       for (let i = 0; i < matches.length - 1; i++) {
         expect(matches[i].compatibilityScore).toBeGreaterThanOrEqual(matches[i + 1].compatibilityScore);
       }
@@ -111,7 +111,17 @@ describe('CapabilityBasedMatcher', () => {
   describe('no-match cases', () => {
     it('returns empty array when capabilities list is empty', () => {
       const situation = prepareSituation(F01_THAI_MANUFACTURER, A01_THAI_MANUFACTURER);
-      const matches = matcher.match(situation, []);
+      const noCapProfile: UserProfile = {
+        id: 'nocap',
+        displayName: 'No Capabilities',
+        interests: [],
+        goals: [],
+        capabilities: [],
+        geographies: [],
+        languages: [],
+        exclusions: [],
+      };
+      const matches = matcher.match(situation, noCapProfile);
       expect(matches).toHaveLength(0);
     });
 
@@ -122,7 +132,7 @@ describe('CapabilityBasedMatcher', () => {
       situation.geographies = ['Unknown'];
       situation.opportunityTypes = ['other'];
       // May or may not match — ensure no error and valid return
-      const matches = matcher.match(situation, USER_CAPABILITIES);
+      const matches = matcher.match(situation, ARTEM_PROFILE);
       expect(Array.isArray(matches)).toBe(true);
     });
   });

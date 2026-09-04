@@ -1,4 +1,4 @@
-import type { Author, UserCapability } from '../domain/index.js';
+import type { Author, UserProfile } from '../domain/index.js';
 import type { NormalizerInterface } from '../normalization/normalizer-interface.js';
 import type { DeduplicatorInterface } from '../deduplication/deduplicator-interface.js';
 import type { CandidateDetectorInterface } from '../detection/candidate-detector-interface.js';
@@ -29,7 +29,7 @@ export class Pipeline {
     private readonly matcher: UserMatcherInterface,
     private readonly cardFormatter: OpportunityCardFormatterInterface,
     private readonly authorResolver: (authorId: string) => Promise<Author>,
-    private readonly userCapabilities: UserCapability[],
+    private readonly userProfile: UserProfile,
     private readonly situationRepository?: SituationRepository
   ) {}
 
@@ -88,7 +88,7 @@ export class Pipeline {
         const situation = this.extractor.extract(content, author, scanRunId);
 
         // 6. Score opportunity
-        const opportunityScore = this.scorer.score(situation, this.userCapabilities);
+        const opportunityScore = this.scorer.score(situation, this.userProfile);
         situation.opportunityScore = opportunityScore;
 
         // 7. Calculate relationship confidence
@@ -96,7 +96,7 @@ export class Pipeline {
         situation.relationshipConfidence = relationshipConfidence;
 
         // 8. Match capabilities
-        const matches = this.matcher.match(situation, this.userCapabilities);
+        const matches = this.matcher.match(situation, this.userProfile);
 
         // 9. Format card
         const card = this.cardFormatter.format(situation, matches, author);

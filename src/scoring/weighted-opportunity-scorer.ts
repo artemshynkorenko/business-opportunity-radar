@@ -1,5 +1,6 @@
 import type {
   Situation,
+  UserProfile,
   UserCapability,
   OpportunityScore,
   ScoreBreakdownEntry,
@@ -8,19 +9,26 @@ import type { OpportunityScorerInterface } from './opportunity-scorer-interface.
 import { SCORE_WEIGHTS } from './score-weights.js';
 
 /**
+ * Neutral geographic weight used when the active profile expresses no priority
+ * for a geography (or no geographic preferences at all). This is the existing
+ * "rest of the world" default — it is NOT any specific user's priority table.
+ */
+const NEUTRAL_GEO_WEIGHT = 5;
+
+/**
  * Weighted opportunity scorer implementing the exact weight table from spec.
  * Each factor is scored 0–max_weight with a human-readable explanation.
  * Weak evidence caps the score and explains why.
  */
 export class WeightedOpportunityScorer implements OpportunityScorerInterface {
-  score(situation: Situation, userCapabilities: UserCapability[]): OpportunityScore {
+  score(situation: Situation, profile: UserProfile): OpportunityScore {
     const breakdown: Record<string, ScoreBreakdownEntry> = {};
 
     // 1. Need / pain (15)
     breakdown.needPain = this.scoreNeedPain(situation);
 
     // 2. User fit (20)
-    breakdown.userFit = this.scoreUserFit(situation, userCapabilities);
+    breakdown.userFit = this.scoreUserFit(situation, profile.capabilities);
 
     // 3. Existing business / traction (15)
     breakdown.existingBusinessTraction = this.scoreExistingBusinessTraction(situation);
@@ -38,7 +46,7 @@ export class WeightedOpportunityScorer implements OpportunityScorerInterface {
     breakdown.actionability = this.scoreActionability(situation);
 
     // 8. Geography (5)
-    breakdown.geography = this.scoreGeography(situation);
+    breakdown.geography = this.scoreGeography(situation, profile);
 
     // 9. Evidence / credibility (4)
     breakdown.evidenceCredibility = this.scoreEvidenceCredibility(situation);
@@ -324,7 +332,7 @@ export class WeightedOpportunityScorer implements OpportunityScorerInterface {
     };
   }
 
-  private scoreGeography(situation: Situation): ScoreBreakdownEntry {
+  private scoreGeography(situation: Situation, profile: UserProfile): ScoreBreakdownEntry {
     const w = SCORE_WEIGHTS.geography;
     const geos = situation.geographies.filter((g) => g !== 'Unknown');
 
@@ -336,11 +344,11 @@ export class WeightedOpportunityScorer implements OpportunityScorerInterface {
       };
     }
 
-    // Find the highest-priority geography
+    // Find the highest-priority geography using the ACTIVE PROFILE's priorities.
     let maxGeoWeight = 0;
     let topGeo = '';
     for (const geo of geos) {
-      const geoW = this.getGeoWeight(geo);
+      const geoW = this.getGeoWeight(geo, profile);
       if (geoW > maxGeoWeight) {
         maxGeoWeight = geoW;
         topGeo = geo;
@@ -418,14 +426,22 @@ export class WeightedOpportunityScorer implements OpportunityScorerInterface {
   // Helpers
   // ---------------------------------------------------------------------------
 
-  private getGeoWeight(geo: string): number {
+  /**
+   * Geographic weight for a situation geography, derived from the ACTIVE
+   * PROFILE's priorities. If the profile lists a matching region, its weight is
+   * used; otherwise the neutral default applies. No user-specific priority table
+   * is baked into the engine.
+   */
+  private getGeoWeight(geo: string, profile: UserProfile): number {
     const lower = geo.toLowerCase();
-    if (lower.includes('thailand') || lower.includes('thai')) return 10;
-    if (lower.includes('russia') || lower.includes('cis')) return 10;
-    if (lower.includes('eu') || lower.includes('europe') || lower.includes('czech')) return 8;
-    if (lower.includes('sea') || lower.includes('southeast')) return 8;
-    if (lower.includes('usa') || lower.includes('united states') || lower.includes('america')) return 7;
-    return 5;
+    let best = 0;
+    for (const pref of profile.geographies) {
+      const region = pref.region.toLowerCase();
+      if (region.includes(lower) || lower.includes(region)) {
+        if (pref.weight > best) best = pref.weight;
+      }
+    }
+    return best > 0 ? best : NEUTRAL_GEO_WEIGHT;
   }
 
   private buildExplanation(

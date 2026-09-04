@@ -5,7 +5,7 @@ import { DeterministicSituationExtractor } from '../../src/extraction/determinis
 import { WeightedOpportunityScorer } from '../../src/scoring/weighted-opportunity-scorer.js';
 import { RelationshipConfidenceCalculator } from '../../src/scoring/relationship-confidence-calculator.js';
 import { CapabilityBasedMatcher } from '../../src/matching/capability-based-matcher.js';
-import { USER_CAPABILITIES } from '../../src/matching/user-capabilities.js';
+import { ARTEM_PROFILE } from '../../src/matching/profiles.js';
 import {
   F01_THAI_MANUFACTURER,
   A01_THAI_MANUFACTURER,
@@ -24,9 +24,9 @@ const matcher = new CapabilityBasedMatcher();
 function prepareCard(raw: unknown, author: Author) {
   const content = normalizer.normalize(raw, 'fixture');
   const situation = extractor.extract(content, author, 'run-test');
-  situation.opportunityScore = scorer.score(situation, USER_CAPABILITIES);
+  situation.opportunityScore = scorer.score(situation, ARTEM_PROFILE);
   situation.relationshipConfidence = confidenceCalc.calculate(situation, author);
-  const matches = matcher.match(situation, USER_CAPABILITIES);
+  const matches = matcher.match(situation, ARTEM_PROFILE);
   return { card: formatter.format(situation, matches, author), situation, matches };
 }
 
@@ -118,7 +118,7 @@ describe('DefaultOpportunityCardFormatter', () => {
     it('still produces valid card with empty matches', () => {
       const content = normalizer.normalize(F01_THAI_MANUFACTURER, 'fixture');
       const situation = extractor.extract(content, A01_THAI_MANUFACTURER, 'run-test');
-      situation.opportunityScore = scorer.score(situation, USER_CAPABILITIES);
+      situation.opportunityScore = scorer.score(situation, ARTEM_PROFILE);
       situation.relationshipConfidence = confidenceCalc.calculate(situation, A01_THAI_MANUFACTURER);
       const card = formatter.format(situation, [], A01_THAI_MANUFACTURER);
       expect(card.renderedText).toContain('No direct capability match');
@@ -129,9 +129,9 @@ describe('DefaultOpportunityCardFormatter', () => {
     it('sourceLink uses the real permalink from the situation', () => {
       const content = normalizer.normalize(F01_THAI_MANUFACTURER, 'fixture');
       const situation = extractor.extract(content, A01_THAI_MANUFACTURER, 'run-test');
-      situation.opportunityScore = scorer.score(situation, USER_CAPABILITIES);
+      situation.opportunityScore = scorer.score(situation, ARTEM_PROFILE);
       situation.relationshipConfidence = confidenceCalc.calculate(situation, A01_THAI_MANUFACTURER);
-      const matches = matcher.match(situation, USER_CAPABILITIES);
+      const matches = matcher.match(situation, ARTEM_PROFILE);
       const card = formatter.format(situation, matches, A01_THAI_MANUFACTURER);
       expect(card.sourceLink).toBe('https://fixture.test/r/internationalbusiness/f01');
     });
@@ -141,9 +141,9 @@ describe('DefaultOpportunityCardFormatter', () => {
       const situation = extractor.extract(content, A01_THAI_MANUFACTURER, 'run-test');
       // Force empty permalink to test fallback
       situation.permalink = '';
-      situation.opportunityScore = scorer.score(situation, USER_CAPABILITIES);
+      situation.opportunityScore = scorer.score(situation, ARTEM_PROFILE);
       situation.relationshipConfidence = confidenceCalc.calculate(situation, A01_THAI_MANUFACTURER);
-      const matches = matcher.match(situation, USER_CAPABILITIES);
+      const matches = matcher.match(situation, ARTEM_PROFILE);
       const card = formatter.format(situation, matches, A01_THAI_MANUFACTURER);
       expect(card.sourceLink).toMatch(/^content:/);
       expect(card.sourceLink).toContain('f01-thai-manufacturer');

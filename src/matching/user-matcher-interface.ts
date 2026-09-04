@@ -1,5 +1,9 @@
-import type { Situation, UserCapability, Match } from '../domain/index.js';
+import type { Situation, UserProfile, Match } from '../domain/index.js';
 
 export interface UserMatcherInterface {
-  match(situation: Situation, capabilities: UserCapability[]): Match[];
+  /**
+   * Match a situation against the active user profile's capabilities.
+   * Interests are NOT capabilities and do not produce capability matches.
+   */
+  match(situation: Situation, profile: UserProfile): Match[];
 }

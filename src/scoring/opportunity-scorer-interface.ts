@@ -1,5 +1,10 @@
-import type { Situation, UserCapability, OpportunityScore } from '../domain/index.js';
+import type { Situation, UserProfile, OpportunityScore } from '../domain/index.js';
 
 export interface OpportunityScorerInterface {
-  score(situation: Situation, userCapabilities: UserCapability[]): OpportunityScore;
+  /**
+   * Score a situation for the active user profile. User fit and geographic
+   * relevance are derived from the profile; the generic scoring mechanics and
+   * weights are user-independent.
+   */
+  score(situation: Situation, profile: UserProfile): OpportunityScore;
 }

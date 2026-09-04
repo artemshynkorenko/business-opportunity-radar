@@ -1,4 +1,4 @@
-import type { Author, UserCapability } from '../../domain/index.js';
+import type { Author, UserProfile } from '../../domain/index.js';
 import { Pipeline } from '../../pipeline/pipeline.js';
 import { InMemoryDeduplicator } from '../../deduplication/in-memory-deduplicator.js';
 import { RuleBasedCandidateDetector } from '../../detection/rule-based-detector.js';
@@ -7,7 +7,7 @@ import { WeightedOpportunityScorer } from '../../scoring/weighted-opportunity-sc
 import { RelationshipConfidenceCalculator } from '../../scoring/relationship-confidence-calculator.js';
 import { CapabilityBasedMatcher } from '../../matching/capability-based-matcher.js';
 import { DefaultOpportunityCardFormatter } from '../../cards/default-card-formatter.js';
-import { USER_CAPABILITIES } from '../../matching/user-capabilities.js';
+import { ARTEM_PROFILE } from '../../matching/profiles.js';
 import type { SituationRepository } from '../../persistence/repositories.js';
 import { PassThroughNormalizer } from './passthrough-normalizer.js';
 
@@ -22,8 +22,8 @@ export interface BuildThreadsPipelineOptions {
    * author profiles, so a minimal resolver is appropriate.
    */
   authorResolver: (authorId: string) => Promise<Author>;
-  /** Capabilities to match against. Defaults to the canonical USER_CAPABILITIES. */
-  userCapabilities?: UserCapability[];
+  /** Active user profile to score/match against. Defaults to the demo ARTEM_PROFILE. */
+  userProfile?: UserProfile;
   /** Optional Situation repository for idempotent persistence (in-memory only). */
   situationRepository?: SituationRepository;
 }
@@ -47,7 +47,7 @@ export function buildDefaultThreadsPipeline(options: BuildThreadsPipelineOptions
     new CapabilityBasedMatcher(),
     new DefaultOpportunityCardFormatter(),
     options.authorResolver,
-    options.userCapabilities ?? USER_CAPABILITIES,
+    options.userProfile ?? ARTEM_PROFILE,
     options.situationRepository
   );
 }
