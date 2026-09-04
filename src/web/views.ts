@@ -26,7 +26,13 @@ const STYLE = `
   .badge { background: #eef3fb; color: #1d6fe0; border-radius: 999px; padding: .1rem .6rem; font-size: .78rem; }
   .why { color: #555; font-size: .92rem; margin: .5rem 0; }
   a.threads { display: inline-block; margin-top: .4rem; }
-  .banner { background: #fff6e0; border: 1px solid #f0d68a; padding: .75rem 1rem; border-radius: 8px; margin: 1rem 0; }
+  /* Neutral, high-contrast informational block (secondary connection notice).
+     Light text on a dark slate surface — never white text on yellow. */
+  .notice { background: #1f2430; color: #e8ebf2; border: 1px solid #333b4d; border-left: 3px solid #1d6fe0; padding: 1rem 1.1rem; border-radius: 8px; margin: 1.5rem 0; }
+  .notice h2 { margin: 0 0 .35rem; font-size: 1.05rem; color: #fff; }
+  .notice p { margin: 0 0 .75rem; color: #c7cede; font-size: .92rem; }
+  .notice p.pending { color: #ffd479; }
+  .notice button.secondary { background: #2f7ff0; color: #fff; }
 `;
 
 function layout(title: string, body: string): string {
@@ -44,37 +50,62 @@ ${body}
 </html>`;
 }
 
+export interface RenderHomeParams {
+  threadsConnected: boolean;
+  /** Previously entered intent to restore into the textarea (survives OAuth). */
+  intent?: string;
+  /**
+   * True when the user pressed Discover while Threads was not connected. Shows a
+   * short explanation that a connection is required; the intent is preserved.
+   */
+  pendingConnect?: boolean;
+}
+
 /**
- * The initial intent form. When Threads is not connected, a "Connect Threads"
- * button is shown instead of enabling the search.
+ * The initial intent form.
+ *
+ * The intent textarea and the Discover button are NEVER disabled — the user can
+ * describe what they want before connecting Threads. Threads connection is a
+ * secondary, data-source requirement shown below the form. When the user tries
+ * to Discover without a connection, their intent is preserved and carried
+ * through the OAuth round trip so they never have to retype it.
  */
-export function renderHome(params: { threadsConnected: boolean }): string {
-  const connectBanner = params.threadsConnected
+export function renderHome(params: RenderHomeParams): string {
+  const intentValue = escapeHtml(params.intent ?? '');
+
+  // The connect form carries the entered intent (hidden field) so it survives
+  // the OAuth redirect and is restored automatically on return.
+  const connectNotice = params.threadsConnected
     ? ''
-    : `<div class="banner">
-         <p>To search public Threads posts, connect a Threads account (read-only).</p>
+    : `<div class="notice">
+         <h2>Connect Threads to search public conversations</h2>
+         <p>Radar uses your Threads connection to find conversations that may contain opportunities relevant to what you're looking for. Your Threads account is used for read-only access.</p>
+         ${
+           params.pendingConnect
+             ? `<p class="pending">Connect Threads to run this search — we've kept what you typed.</p>`
+             : ''
+         }
          <form method="get" action="/auth/threads">
+           <input type="hidden" name="intent" value="${intentValue}" />
            <button class="secondary" type="submit">Connect Threads</button>
          </form>
        </div>`;
 
-  const searchDisabled = params.threadsConnected ? '' : 'disabled';
-
   const body = `
-    <h1>Business Opportunity Radar</h1>
-    <p class="tagline">Discover potentially valuable opportunities from public conversations.</p>
-
-    ${connectBanner}
+    <h1>Discovery Radar</h1>
+    <p class="tagline">Discover interesting people, conversations and possibilities.</p>
 
     <form method="post" action="/search">
       <label for="intent"><strong>What are you looking for?</strong></label>
-      <p class="example">Example: "I'm looking for Thai manufacturers who want to expand into Europe and may be looking for a local partner."</p>
-      <textarea id="intent" name="intent" placeholder="Describe what you want to discover…" ${searchDisabled}></textarea>
-      <p><button type="submit" ${searchDisabled}>Find opportunities</button></p>
+      <p class="example">Example: "I’m looking for fellow silkworm-larvae enthusiasts in Thailand. Apparently, networking has gotten more interesting."</p>
+      <textarea id="intent" name="intent" placeholder="Describe what you want to discover…">${intentValue}</textarea>
+      <p><button type="submit">Discover</button></p>
     </form>
-    <p class="example">You describe what you want to find. The Radar decides how to search Threads for it — you never enter API keywords.</p>
+    <p class="example">You describe what you want to find. The Radar decides how to search for it — you never enter API keywords.</p>
+
+    ${connectNotice}
   `;
-  return layout('Business Opportunity Radar', body);
+  return layout('Discovery Radar', body);
 }
 
 /** Render the results page: the derived strategy, then opportunity cards. */
@@ -103,7 +134,7 @@ export function renderResults(result: OpportunitySearchResult): string {
     ${status}
     ${cards}
   `;
-  return layout('Opportunities — Business Opportunity Radar', body);
+  return layout('Discovery Radar — Results', body);
 }
 
 function renderCard(o: OpportunitySearchResult['opportunities'][number]): string {
@@ -127,7 +158,7 @@ function renderCard(o: OpportunitySearchResult['opportunities'][number]): string
 /** A minimal error page. */
 export function renderError(message: string): string {
   return layout(
-    'Error — Business Opportunity Radar',
+    'Error — Discovery Radar',
     `<h1>Something went wrong</h1><p>${escapeHtml(message)}</p><p><a href="/">← Back</a></p>`
   );
 }

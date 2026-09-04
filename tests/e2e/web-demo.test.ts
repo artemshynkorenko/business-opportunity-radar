@@ -122,24 +122,65 @@ async function run(
 // ===========================================================================
 
 describe('Web demo — intent form', () => {
-  it('renders the initial intent form', async () => {
+  it('renders the initial intent form with the Discovery Radar branding and Discover button', async () => {
     const out = await run(mockGet('/'), createDemoState(), baseDeps());
     expect(out.status).toBe(200);
-    expect(out.body).toContain('Business Opportunity Radar');
+    expect(out.body).toContain('Discovery Radar');
+    expect(out.body).toContain('Discover interesting people, conversations and possibilities.');
     expect(out.body).toContain('What are you looking for?');
     expect(out.body).toContain('<textarea');
+    // Primary action renamed to "Discover".
+    expect(out.body).toContain('>Discover</button>');
+    // Old product name / tagline / action copy must be gone from the UI.
+    expect(out.body).not.toContain('Business Opportunity Radar');
+    expect(out.body).not.toContain('Find opportunities');
+    expect(out.body).not.toContain('Discover potentially valuable opportunities from public conversations.');
   });
 
-  it('shows Connect Threads when not connected', async () => {
+  it('uses the neutral, non-commercial example (no business/market copy)', async () => {
     const out = await run(mockGet('/'), createDemoState(), baseDeps());
-    expect(out.body).toContain('Connect Threads');
+    expect(out.body).toContain('silkworm-larvae enthusiasts in Thailand');
+    expect(out.body).not.toContain('Thai manufacturers who want to expand into Europe');
   });
 
-  it('does not show Connect Threads once connected', async () => {
+  it('never disables the intent textarea or the Discover button when Threads is not connected', async () => {
+    const out = await run(mockGet('/'), createDemoState(), baseDeps());
+    // The textarea and button carry no `disabled` attribute.
+    const textareaTag = out.body.slice(out.body.indexOf('<textarea'), out.body.indexOf('</textarea>'));
+    expect(textareaTag).not.toContain('disabled');
+    expect(out.body).not.toMatch(/<button[^>]*disabled/);
+  });
+
+  it('shows the secondary Threads connection notice with the new copy when not connected', async () => {
+    const out = await run(mockGet('/'), createDemoState(), baseDeps());
+    expect(out.body).toContain('Connect Threads to search public conversations');
+    expect(out.body).toContain(
+      "Radar uses your Threads connection to find conversations that may contain opportunities relevant to what you're looking for. Your Threads account is used for read-only access."
+    );
+    expect(out.body).toContain('Connect Threads');
+    // The connection notice uses the neutral high-contrast block, not the old
+    // yellow banner.
+    expect(out.body).toContain('class="notice"');
+    expect(out.body).not.toContain('class="banner"');
+    // Stale/technical copy must be gone.
+    expect(out.body).not.toContain('To search public Threads posts, connect a Threads account');
+  });
+
+  it('places the intent form ABOVE the secondary connection notice', async () => {
+    const out = await run(mockGet('/'), createDemoState(), baseDeps());
+    const intentIdx = out.body.indexOf('What are you looking for?');
+    const noticeIdx = out.body.indexOf('Connect Threads to search public conversations');
+    expect(intentIdx).toBeGreaterThan(-1);
+    expect(noticeIdx).toBeGreaterThan(-1);
+    expect(intentIdx).toBeLessThan(noticeIdx);
+  });
+
+  it('does not show the connection notice once connected', async () => {
     const state = createDemoState();
     state.accessToken = 'server-side-token';
     const out = await run(mockGet('/'), state, baseDeps());
     expect(out.body).not.toContain('Connect Threads');
+    expect(out.body).not.toContain('class="notice"');
   });
 });
 
@@ -296,14 +337,20 @@ describe('Web demo — retrieval wiring + pipeline + cards', () => {
     expect(out.body).toContain('Searched Threads');
   });
 
-  it('POST /search is blocked when Threads is not connected', async () => {
+  it('POST /search without a connection preserves the intent and prompts to connect (no dead-end)', async () => {
+    const intent = 'silkworm-larvae enthusiasts in Thailand';
     const out = await run(
-      mockPost('/search', 'intent=anything'),
+      mockPost('/search', 'intent=' + encodeURIComponent(intent)),
       createDemoState(),
       baseDeps()
     );
-    expect(out.status).toBe(403);
-    expect(out.body).toMatch(/not connected/i);
+    // Not a dead-end error: it re-renders the home page (200).
+    expect(out.status).toBe(200);
+    // The typed intent is preserved in the textarea.
+    expect(out.body).toContain(intent);
+    // It explains a connection is required and offers Connect Threads.
+    expect(out.body).toContain('Connect Threads to search public conversations');
+    expect(out.body).toMatch(/kept what you typed/i);
   });
 
   it('empty intent on /search returns a helpful error', async () => {
@@ -322,5 +369,61 @@ describe('Web demo — retrieval wiring + pipeline + cards', () => {
       baseDeps()
     );
     expect(out.body).not.toContain('super-secret-token-value');
+  });
+});
+
+describe('Web demo — intent survives the OAuth round trip', () => {
+  it('carries the intent from the connect form through OAuth and restores it on return', async () => {
+    const state = createDemoState();
+    const intent = "I'm looking for fellow silkworm-larvae enthusiasts in Thailand";
+
+    // 1. User tries to Discover while disconnected → home re-rendered with a
+    //    connect form that carries the intent as a hidden field.
+    const blocked = await run(
+      mockPost('/search', 'intent=' + encodeURIComponent(intent)),
+      state,
+      baseDeps()
+    );
+    expect(blocked.body).toContain(`name="intent" value="${intent}"`.replace(/'/g, '&#39;'));
+
+    // 2. Start OAuth carrying that intent.
+    const start = await run(
+      mockGet('/auth/threads?intent=' + encodeURIComponent(intent)),
+      state,
+      baseDeps()
+    );
+    const validState = new URL(start.headers['Location'] as string).searchParams.get('state')!;
+    // The intent is stored server-side with the pending state (not in the browser).
+    expect(state.pendingStates.get(validState)?.intent).toBe(intent);
+
+    // 3. Complete the callback → redirect restores the intent via query param.
+    const cb = await run(
+      mockGet(`/auth/threads/callback?code=c&state=${validState}`),
+      state,
+      baseDeps()
+    );
+    expect(cb.status).toBe(302);
+    const location = cb.headers['Location'] as string;
+    expect(location).toContain('/?intent=');
+    expect(decodeURIComponent(new URL(location, 'http://x').searchParams.get('intent')!)).toBe(intent);
+
+    // 4. GET / with the restored intent pre-fills the textarea (HTML-escaped);
+    //    user is connected now.
+    const home = await run(mockGet(location), state, baseDeps());
+    expect(home.body).toContain('silkworm-larvae enthusiasts in Thailand');
+    // Connected now → no connection notice.
+    expect(home.body).not.toContain('Connect Threads');
+  });
+
+  it('OAuth with no prior intent redirects to plain "/"', async () => {
+    const state = createDemoState();
+    const start = await run(mockGet('/auth/threads'), state, baseDeps());
+    const validState = new URL(start.headers['Location'] as string).searchParams.get('state')!;
+    const cb = await run(
+      mockGet(`/auth/threads/callback?code=c&state=${validState}`),
+      state,
+      baseDeps()
+    );
+    expect(cb.headers['Location']).toBe('/');
   });
 });

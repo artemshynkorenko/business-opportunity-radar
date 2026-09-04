@@ -31,12 +31,15 @@ export interface ServerDeps {
 export interface DemoState {
   /** Server-side Threads access token (never exposed to the browser). */
   accessToken?: string;
-  /** Pending OAuth state tokens awaiting callback (CSRF protection). */
-  pendingStates: Set<string>;
+  /**
+   * Pending OAuth states awaiting callback (CSRF protection). The value carries
+   * the intent the user typed before connecting, so it survives the round trip.
+   */
+  pendingStates: Map<string, { intent: string }>;
 }
 
 export function createDemoState(): DemoState {
-  return { pendingStates: new Set<string>() };
+  return { pendingStates: new Map<string, { intent: string }>() };
 }
 
 /** Read and parse a urlencoded request body (bounded to avoid abuse). */
@@ -82,16 +85,20 @@ export async function handleRequest(
   const method = req.method ?? 'GET';
 
   try {
-    // Home / intent form.
+    // Home / intent form. Restores a prior intent (e.g. after OAuth) when
+    // provided via the `intent` query param.
     if (method === 'GET' && url.pathname === '/') {
-      send(res, 200, renderHome({ threadsConnected: state.accessToken !== undefined }));
+      const intent = url.searchParams.get('intent') ?? undefined;
+      send(res, 200, renderHome({ threadsConnected: state.accessToken !== undefined, intent }));
       return;
     }
 
-    // Start Threads OAuth (read-only scopes only).
+    // Start Threads OAuth (read-only scopes only). Carries the user's intent
+    // through the round trip so it is restored automatically on return.
     if (method === 'GET' && url.pathname === '/auth/threads') {
+      const intent = (url.searchParams.get('intent') ?? '').trim();
       const oauthState = generateOAuthState();
-      state.pendingStates.add(oauthState);
+      state.pendingStates.set(oauthState, { intent });
       redirect(res, buildAuthorizeUrl(deps.oauthConfig, oauthState));
       return;
     }
@@ -101,7 +108,8 @@ export async function handleRequest(
       const code = url.searchParams.get('code');
       const returnedState = url.searchParams.get('state');
 
-      if (!returnedState || !state.pendingStates.has(returnedState)) {
+      const pending = returnedState ? state.pendingStates.get(returnedState) : undefined;
+      if (!returnedState || pending === undefined) {
         send(res, 400, renderError('Invalid or missing OAuth state (possible CSRF). Please try connecting again.'));
         return;
       }
@@ -115,20 +123,29 @@ export async function handleRequest(
 
       const { accessToken } = await exchangeCodeForToken(deps.oauthConfig, code, deps.oauthFetch);
       state.accessToken = accessToken; // held server-side only
-      redirect(res, '/');
+
+      // Restore the intent the user typed before connecting (if any) so they
+      // never have to retype it. The intent is not sensitive.
+      const restore = pending.intent.length > 0 ? `/?intent=${encodeURIComponent(pending.intent)}` : '/';
+      redirect(res, restore);
       return;
     }
 
     // Run a search from the user's intent.
     if (method === 'POST' && url.pathname === '/search') {
-      if (state.accessToken === undefined) {
-        send(res, 403, renderError('Threads is not connected. Please connect a Threads account first.'));
-        return;
-      }
       const form = await readFormBody(req);
       const intent = (form.get('intent') ?? '').trim();
+
       if (intent.length === 0) {
         send(res, 400, renderError('Please describe what you are looking for.'));
+        return;
+      }
+
+      // If Threads is not connected, do NOT dead-end: keep the intent, explain
+      // that a connection is required, and offer Connect Threads (which carries
+      // the intent through OAuth so it is restored on return).
+      if (state.accessToken === undefined) {
+        send(res, 200, renderHome({ threadsConnected: false, intent, pendingConnect: true }));
         return;
       }
 
